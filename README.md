@@ -1,9 +1,9 @@
-# Kuperbelt
-Asynchronouse Protocol Proxy
+# Kuiperbelt
+Asynchronous Protocol Proxy
 
-# install
+## install
 
 ```
 $ go get github.com/mackee/kuiperbelt
-$ go install github.com/mackee/kuiperbelt/cmd/ekbo
+$ go install github.com/mackee/kuiperbelt
 ```
