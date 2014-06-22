@@ -5,5 +5,11 @@ Asynchronous Protocol Proxy
 
 ```
 $ go get github.com/mackee/kuiperbelt
-$ go install github.com/mackee/kuiperbelt
+$ go install github.com/mackee/kuiperbelt/cmd/ekbo
+```
+
+## usage
+
+```
+$ ekbo -h
 ```
