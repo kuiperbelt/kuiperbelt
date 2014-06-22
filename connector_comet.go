@@ -30,23 +30,35 @@ func (conn *CometConnector) NewConnection(w http.ResponseWriter, uuid string) ch
 	helloBytes, _ := json.Marshal(helloMessage)
 
 	writeMessage(w, helloBytes)
-	connectorChan := make(chan []byte)
-	closeConnectChan := make(chan int)
-	conn.chans[uuid] = connectorChan
-	go connectionLoop(w, connectorChan, closeConnectChan)
+	closeChan := make(chan int)
+	go conn.loop(w, uuid, closeChan)
 
-	return closeConnectChan
+	return closeChan
 }
 
-func connectionLoop(w http.ResponseWriter, connectorChan chan []byte, closeConnectChan chan int) {
+func (conn *CometConnector) loop(w http.ResponseWriter, uuid string, closeChan chan int) {
+	notifyChan := w.(http.CloseNotifier).CloseNotify()
+	connChan := make(chan []byte)
+	conn.chans[uuid] = connChan
+Loop:
 	for {
-		message, ok := <-connectorChan
-		if !ok {
-			break
+		select {
+		case message, ok := <-connChan:
+			if !ok {
+				break Loop
+			}
+			writeMessage(w, message)
+		case <-notifyChan:
+			conn.removeChan(uuid)
+			break Loop
 		}
-		writeMessage(w, message)
 	}
-	closeConnectChan <- 1
+	closeChan <- 1
+}
+
+func (conn *CometConnector) removeChan(uuid string) {
+	close(conn.chans[uuid])
+	delete(conn.chans, uuid)
 }
 
 func writeMessage(w http.ResponseWriter, message []byte) {
