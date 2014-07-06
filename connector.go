@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type Connector interface {
@@ -20,9 +21,13 @@ type HelloMessage struct {
 }
 
 var (
-	connector     Connector
-	sendChan      = make(chan []byte)
-	broadcastChan = make(chan []byte)
+	connector        Connector
+	sendChan         = make(chan []byte)
+	broadcastChan    = make(chan []byte)
+	broadcastCond    *sync.Cond
+	broadcastWg      *sync.WaitGroup
+	broadcastMessage []byte
+	broadcastLocker  *sync.Mutex
 )
 
 func InitConnector(connectorName string) {
@@ -33,20 +38,29 @@ func InitConnector(connectorName string) {
 		log.Fatalf("not found connector: %s", connectorName)
 	}
 
+	broadcastLocker = new(sync.Mutex)
+	broadcastCond = sync.NewCond(broadcastLocker)
+	broadcastWg = new(sync.WaitGroup)
+
 	go sendLoop()
 	go broadcastLoop()
 	http.HandleFunc("/connect", ConnectorHandler)
 }
 
 func ConnectorHandler(w http.ResponseWriter, req *http.Request) {
-	closeConnectChan := newConnection(w)
+	closeConnectChan, err := newConnection(w)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	<-closeConnectChan
 }
 
-func newConnection(w http.ResponseWriter) chan int {
+func newConnection(w http.ResponseWriter) (chan int, error) {
 	uuid, _ := newUUID()
 	closeConnectChan := connector.NewConnection(w, uuid)
-	return closeConnectChan
+	go broadcastNotifyLoop(uuid)
+	return closeConnectChan, nil
 }
 
 func sendLoop() {
@@ -78,16 +92,33 @@ func sendLoop() {
 	}
 }
 
+func broadcastNotifyLoop(uuid string) {
+	defer broadcastLocker.Unlock()
+	for {
+		broadcastLocker.Lock()
+		broadcastCond.Wait()
+		broadcastWg.Add(1)
+		connectorChan, existsConnector := connector.GetChan(uuid)
+		if !existsConnector {
+			broadcastWg.Done()
+			break
+		}
+		connectorChan <- broadcastMessage
+		broadcastLocker.Unlock()
+		broadcastWg.Done()
+	}
+}
+
 func broadcastLoop() {
 	for {
+		broadcastWg.Wait()
 		message, ok := <-broadcastChan
 		if !ok {
 			log.Println("send destroy...")
 			break
 		}
-		for _, connectorChan := range connector.GetChans() {
-			connectorChan <- message
-		}
+		broadcastMessage = message
+		broadcastCond.Broadcast()
 	}
 }
 
