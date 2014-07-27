@@ -1,7 +1,6 @@
 package kuiperbelt
 
 import (
-	"log"
 	"sync"
 )
 
@@ -69,12 +68,10 @@ func (bn *BroadcastNotifier) runBroadcaster() bool {
 	defer bn.locker.Unlock()
 	bn.wg.Add(bn.countChans())
 	close(bn.notifyingChan)
-	log.Printf("sending of broadcast")
 	bn.wg.Wait()
 	close(bn.doneChan)
 	bn.notifyingChan = make(chan struct{})
 	bn.doneChan = make(chan struct{})
-	log.Printf("end of broadcast")
 	return true
 }
 
