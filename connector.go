@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync"
 )
 
 type Connector interface {
@@ -21,13 +20,9 @@ type HelloMessage struct {
 }
 
 var (
-	connector        Connector
-	sendChan         = make(chan []byte)
-	broadcastChan    = make(chan []byte)
-	broadcastCond    *sync.Cond
-	broadcastWg      *sync.WaitGroup
-	broadcastMessage []byte
-	broadcastLocker  *sync.Mutex
+	connector         Connector
+	sendChan          = make(chan []byte)
+	broadcastNotifier *BroadcastNotifier
 )
 
 func InitConnector(connectorName string) {
@@ -37,13 +32,9 @@ func InitConnector(connectorName string) {
 	default:
 		log.Fatalf("not found connector: %s", connectorName)
 	}
-
-	broadcastLocker = new(sync.Mutex)
-	broadcastCond = sync.NewCond(broadcastLocker)
-	broadcastWg = new(sync.WaitGroup)
+	broadcastNotifier = NewBroadcastNotifier()
 
 	go sendLoop()
-	go broadcastLoop()
 	http.HandleFunc("/connect", ConnectorHandler)
 }
 
@@ -59,7 +50,7 @@ func ConnectorHandler(w http.ResponseWriter, req *http.Request) {
 func newConnection(w http.ResponseWriter) (chan int, error) {
 	uuid, _ := newUUID()
 	closeConnectChan := connector.NewConnection(w, uuid)
-	go broadcastNotifyLoop(uuid)
+	go broadcastNotifier.NotifyLoop(uuid)
 	return closeConnectChan, nil
 }
 
@@ -89,36 +80,6 @@ func sendLoop() {
 			break
 		}
 
-	}
-}
-
-func broadcastNotifyLoop(uuid string) {
-	defer broadcastLocker.Unlock()
-	for {
-		broadcastLocker.Lock()
-		broadcastCond.Wait()
-		broadcastWg.Add(1)
-		connectorChan, existsConnector := connector.GetChan(uuid)
-		if !existsConnector {
-			broadcastWg.Done()
-			break
-		}
-		connectorChan <- broadcastMessage
-		broadcastLocker.Unlock()
-		broadcastWg.Done()
-	}
-}
-
-func broadcastLoop() {
-	for {
-		broadcastWg.Wait()
-		message, ok := <-broadcastChan
-		if !ok {
-			log.Println("send destroy...")
-			break
-		}
-		broadcastMessage = message
-		broadcastCond.Broadcast()
 	}
 }
 

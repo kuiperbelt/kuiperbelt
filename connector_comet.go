@@ -11,7 +11,9 @@ type CometConnector struct {
 }
 
 func NewCometConnector() Connector {
-	return &CometConnector{chans: make(map[string]chan []byte)}
+	return &CometConnector{
+		chans: make(map[string]chan []byte),
+	}
 }
 
 func (conn *CometConnector) GetChans() map[string]chan []byte {

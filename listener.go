@@ -23,6 +23,6 @@ func SendHandler(w http.ResponseWriter, req *http.Request) {
 func BroadcastHandler(w http.ResponseWriter, req *http.Request) {
 	var buf bytes.Buffer
 	buf.ReadFrom(req.Body)
-	broadcastChan <- buf.Bytes()
+	broadcastNotifier.ReceiveMessage(buf.Bytes())
 	io.WriteString(w, okResponse)
 }
