@@ -1,10 +1,7 @@
 package kuiperbelt
 
 import (
-	"crypto/rand"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 )
@@ -32,26 +29,10 @@ func InitConnector(connectorName string) {
 	default:
 		log.Fatalf("not found connector: %s", connectorName)
 	}
-	broadcastNotifier = NewBroadcastNotifier()
+	broadcastNotifier = NewBroadcastNotifier(connector)
 
 	go sendLoop()
 	http.HandleFunc("/connect", ConnectorHandler)
-}
-
-func ConnectorHandler(w http.ResponseWriter, req *http.Request) {
-	closeConnectChan, err := newConnection(w)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	<-closeConnectChan
-}
-
-func newConnection(w http.ResponseWriter) (chan int, error) {
-	uuid, _ := newUUID()
-	closeConnectChan := connector.NewConnection(w, uuid)
-	go broadcastNotifier.NotifyLoop(uuid)
-	return closeConnectChan, nil
 }
 
 func sendLoop() {
@@ -81,19 +62,4 @@ func sendLoop() {
 		}
 
 	}
-}
-
-// newUUID generates a random UUID according to RFC 4122
-// http://play.golang.org/p/4FkNSiUDMg
-func newUUID() (string, error) {
-	uuid := make([]byte, 16)
-	n, err := io.ReadFull(rand.Reader, uuid)
-	if n != len(uuid) || err != nil {
-		return "", err
-	}
-	// variant bits; see section 4.1.1
-	uuid[8] = uuid[8]&^0xc0 | 0x80
-	// version 4 (pseudo-random); see section 4.1.3
-	uuid[6] = uuid[6]&^0xf0 | 0x40
-	return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }
