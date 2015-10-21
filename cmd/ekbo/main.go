@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 
-	"github.com/mackee/kuiperbelt_new"
+	"github.com/mackee/kuiperbelt"
 )
 
 func main() {
