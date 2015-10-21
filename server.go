@@ -27,7 +27,6 @@ func (s *WebSocketServer) WebSocketHandler(ws *websocket.Conn) {
 	}
 	AddSession(session)
 	defer DelSession(session.Key())
-	io.WriteString(ws, session.Key())
 	log.Println("connected key:", session.Key())
 	session.WaitClose()
 }

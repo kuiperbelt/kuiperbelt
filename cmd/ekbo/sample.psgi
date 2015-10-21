@@ -7,7 +7,7 @@ my $app = sub {
     my $env = shift;
     my $req = Plack::Request->new($env);
 
-    my $session = $req->parameters->{session};
+    my $session = $req->header("X-Kuiperbelt-Session");
 
-    return ["200", ["X-Kuiperbelt-Session" => $session], [$session]];
+    return ["200", ["X-Kuiperbelt-Session" => $session], ["success connect"]];
 };
