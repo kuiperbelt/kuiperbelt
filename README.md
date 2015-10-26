@@ -1,16 +1,17 @@
 # kuiperbelt
 
+[![Build Status](https://travis-ci.org/mackee/kuiperbelt.svg)](https://travis-ci.org/mackee/kuiperbelt)
+
 Asynchronous Protocol proxy for prefork backend.
 
 ## Install & Usage
 
 ```
-$ go get gopkg.in/mackee/kuiperbelt.v1/cmd/ekbo
+$ go get github.com/mackee/kuiperbelt/cmd/ekbo
 $ cat config.yml
 port: 12345
 callback:
   connect: "http://localhost:12346/connect"
-  receive: "http://localhost:12346/receive"
 # launch something server within 12346 port.
 $ ./ekbo -config=config.yml
 ```
