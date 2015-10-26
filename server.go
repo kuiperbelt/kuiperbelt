@@ -33,8 +33,8 @@ func (s *WebSocketServer) WebSocketHandler(ws *websocket.Conn) {
 
 func (s *WebSocketServer) Register() {
 	http.HandleFunc("/connect", func(w http.ResponseWriter, r *http.Request) {
-		s := websocket.Server{Handler: websocket.Handler(s.WebSocketHandler)}
-		s.ServeHTTP(w, r)
+		server := websocket.Server{Handler: websocket.Handler(s.WebSocketHandler)}
+		server.ServeHTTP(w, r)
 	})
 }
 
