@@ -3,7 +3,6 @@ package kuiperbelt
 import (
 	"bytes"
 	"encoding/json"
-	"gopkg.in/pp.v1"
 	"io"
 	"log"
 	"net/http"
@@ -19,7 +18,6 @@ func (p *Proxy) Register() {
 
 func (p *Proxy) HandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	pp.Println(r)
 
 	if r.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
