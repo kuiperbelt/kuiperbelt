@@ -12,7 +12,7 @@ callback:
   connect: "http://localhost:12346/connect"
   receive: "http://localhost:12346/receive"
 `)
-var expectedConfig = Config{
+var TestConfig = Config{
 	Port:          ":12345",
 	SessionHeader: "X-Kuiperbelt-Session-Key",
 	Callback: Callback{
@@ -21,13 +21,13 @@ var expectedConfig = Config{
 	},
 }
 
-func TestConfig(t *testing.T) {
+func TestConfig__Unmarshal(t *testing.T) {
 	c, err := unmarshalConfig(configData)
 	if err != nil {
 		t.Fatal("unexpected error:", err)
 	}
 
-	if reflect.DeepEqual(expectedConfig, *c) {
-		t.Errorf("unexpected config data:\n\t%+v\n\t%+v\n", expectedConfig, *c)
+	if reflect.DeepEqual(TestConfig, *c) {
+		t.Errorf("unexpected config data:\n\t%+v\n\t%+v\n", TestConfig, *c)
 	}
 }
