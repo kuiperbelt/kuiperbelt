@@ -32,7 +32,10 @@ func (s *WebSocketServer) WebSocketHandler(ws *websocket.Conn) {
 }
 
 func (s *WebSocketServer) Register() {
-	http.Handle("/connect", websocket.Handler(s.WebSocketHandler))
+	http.HandleFunc("/connect", func(w http.ResponseWriter, r *http.Request) {
+		s := websocket.Server{Handler: websocket.Handler(s.WebSocketHandler)}
+		s.ServeHTTP(w, r)
+	})
 }
 
 type WebSocketSession struct {
