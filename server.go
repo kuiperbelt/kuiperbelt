@@ -1,6 +1,7 @@
 package kuiperbelt
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log"
@@ -15,25 +16,34 @@ var (
 	callbackClient                     = new(http.Client)
 )
 
+type ConnectCallbackError struct {
+	Status int
+	error  error
+}
+
+func (e ConnectCallbackError) Error() string {
+	return e.error.Error()
+}
+
 type WebSocketServer struct {
 	Config Config
 }
 
-func (s *WebSocketServer) WebSocketHandler(ws *websocket.Conn) {
-	session, err := s.NewWebSocketSession(ws)
-	if err != nil {
-		log.Println("connect error:", err)
-		return
-	}
-	AddSession(session)
-	defer DelSession(session.Key())
-	log.Println("connected key:", session.Key())
-	session.WaitClose()
-}
-
 func (s *WebSocketServer) Register() {
 	http.HandleFunc("/connect", func(w http.ResponseWriter, r *http.Request) {
-		server := websocket.Server{Handler: websocket.Handler(s.WebSocketHandler)}
+		defer r.Body.Close()
+		resp, err := s.ConnectCallbackHandler(w, r)
+		if err != nil {
+			if ce, ok := err.(ConnectCallbackError); ok {
+				w.WriteHeader(ce.Status)
+			} else {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			io.WriteString(w, err.Error())
+			return
+		}
+
+		server := websocket.Server{Handler: websocket.Handler(s.NewWebSocketHandler(resp))}
 		server.ServeHTTP(w, r)
 	})
 }
@@ -45,23 +55,48 @@ type WebSocketSession struct {
 	Config  Config
 }
 
-func (s *WebSocketServer) NewWebSocketSession(ws *websocket.Conn) (*WebSocketSession, error) {
-	req := ws.Request()
-	defer req.Body.Close()
-	callbackRequest, err := http.NewRequest(req.Method, s.Config.Callback.Connect, req.Body)
+func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
+	callbackRequest, err := http.NewRequest(r.Method, s.Config.Callback.Connect, r.Body)
 	if err != nil {
-		return nil, err
+		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
-	callbackRequest.Header = req.Header
+	callbackRequest.Header = r.Header
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
-		return nil, connectCallbackIsNotAvailableError
+		return nil, ConnectCallbackError{http.StatusBadGateway, connectCallbackIsNotAvailableError}
 	}
-	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		b := new(bytes.Buffer)
+		b.ReadFrom(resp.Body)
+		return nil, ConnectCallbackError{resp.StatusCode, errors.New(b.String())}
+	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
-		return nil, sessionKeyNotExistError
+		return nil, ConnectCallbackError{http.StatusBadRequest, sessionKeyNotExistError}
 	}
+
+	return resp, nil
+}
+
+func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *websocket.Conn) {
+	return func(ws *websocket.Conn) {
+		session, err := s.NewWebSocketSession(resp, ws)
+		if err != nil {
+			log.Println("connect error:", err)
+			return
+		}
+		AddSession(session)
+		defer DelSession(session.Key())
+		log.Println("connected key:", session.Key())
+		session.WaitClose()
+	}
+}
+
+func (s *WebSocketServer) NewWebSocketSession(resp *http.Response, ws *websocket.Conn) (*WebSocketSession, error) {
+	key := resp.Header.Get(s.Config.SessionHeader)
+	defer resp.Body.Close()
 	closeCh := make(chan struct{})
 	session := &WebSocketSession{ws, key, closeCh, s.Config}
 	io.Copy(session, resp.Body)
