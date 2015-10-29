@@ -29,23 +29,25 @@ type WebSocketServer struct {
 	Config Config
 }
 
-func (s *WebSocketServer) Register() {
-	http.HandleFunc("/connect", func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		resp, err := s.ConnectCallbackHandler(w, r)
-		if err != nil {
-			if ce, ok := err.(ConnectCallbackError); ok {
-				w.WriteHeader(ce.Status)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			io.WriteString(w, err.Error())
-			return
+func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	resp, err := s.ConnectCallbackHandler(w, r)
+	if err != nil {
+		if ce, ok := err.(ConnectCallbackError); ok {
+			w.WriteHeader(ce.Status)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
 		}
+		io.WriteString(w, err.Error())
+		return
+	}
 
-		server := websocket.Server{Handler: websocket.Handler(s.NewWebSocketHandler(resp))}
-		server.ServeHTTP(w, r)
-	})
+	server := websocket.Server{Handler: websocket.Handler(s.NewWebSocketHandler(resp))}
+	server.ServeHTTP(w, r)
+}
+
+func (s *WebSocketServer) Register() {
+	http.HandleFunc("/connect", s.Handler)
 }
 
 type WebSocketSession struct {
