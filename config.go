@@ -2,7 +2,9 @@ package kuiperbelt
 
 import (
 	"io/ioutil"
+	"net"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v1"
 )
@@ -45,7 +47,17 @@ func unmarshalConfig(b []byte) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		config.Endpoint = hostname
+
+		p, err := strconv.Atoi(config.Port)
+		if err != nil {
+			return nil, err
+		}
+
+		if p <= 1023 {
+			config.Endpoint = hostname
+		} else {
+			config.Endpoint = net.JoinHostPort(hostname, config.Port)
+		}
 	}
 
 	return &config, nil
