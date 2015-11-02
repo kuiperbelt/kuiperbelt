@@ -10,6 +10,10 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+const (
+	ENDPOINT_HEADER_NAME = "X-Kuiperbelt-Endpoint"
+)
+
 var (
 	sessionKeyNotExistError            = errors.New("session key is not exist.")
 	connectCallbackIsNotAvailableError = errors.New("connect callback is not available.")
@@ -63,6 +67,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
 	callbackRequest.Header = r.Header
+	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusBadGateway, connectCallbackIsNotAvailableError}

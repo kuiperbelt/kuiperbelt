@@ -14,14 +14,14 @@ const (
 )
 
 type testSuccessConnectCallbackServer struct {
-	SessionKey   string
 	IsCallbacked bool
+	Header       http.Header
 }
 
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsCallbacked = true
 	key := r.Header.Get(testRequestSessionHeader)
-	s.SessionKey = key
+	s.Header = r.Header
 	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
 	w.WriteHeader(http.StatusOK)
 }
@@ -79,8 +79,17 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 	if !callbackServer.IsCallbacked {
 		t.Error("callback server doesn't receive request")
 	}
-	if callbackServer.SessionKey != "hogehoge" {
-		t.Error("callback server doesn't receive session key:", callbackServer.SessionKey)
+	if callbackServer.Header.Get(testRequestSessionHeader) != "hogehoge" {
+		t.Error(
+			"callback server doesn't receive session key:",
+			callbackServer.Header.Get(testRequestSessionHeader),
+		)
+	}
+	if callbackServer.Header.Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
+		t.Error(
+			"callback server doesn't receive endpoint name:",
+			callbackServer.Header.Get(testRequestSessionHeader),
+		)
 	}
 }
 
