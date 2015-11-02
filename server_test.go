@@ -20,7 +20,6 @@ type testSuccessConnectCallbackServer struct {
 
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsCallbacked = true
-	key := r.Header.Get(testRequestSessionHeader)
 	s.Header = r.Header
 	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
 	w.WriteHeader(http.StatusOK)
@@ -28,8 +27,7 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 
 func (s *testSuccessConnectCallbackServer) FailHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsCallbacked = true
-	key := r.Header.Get(testRequestSessionHeader)
-	s.SessionKey = key
+	s.Header = r.Header
 	w.WriteHeader(http.StatusForbidden)
 	io.WriteString(w, "fail authorization!")
 }
