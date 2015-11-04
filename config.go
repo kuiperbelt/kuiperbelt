@@ -2,7 +2,9 @@ package kuiperbelt
 
 import (
 	"io/ioutil"
+	"net"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v1"
 )
@@ -11,6 +13,7 @@ type Config struct {
 	Callback      Callback `yaml:"callback"`
 	SessionHeader string   `yaml:"session_header"`
 	Port          string   `yaml:"port"`
+	Endpoint      string   `yaml:"endpoint"`
 }
 
 type Callback struct {
@@ -39,5 +42,23 @@ func unmarshalConfig(b []byte) (*Config, error) {
 	if config.SessionHeader == "" {
 		config.SessionHeader = "X-Kuiperbelt-Session"
 	}
+	if config.Endpoint == "" {
+		hostname, err := os.Hostname()
+		if err != nil {
+			return nil, err
+		}
+
+		p, err := strconv.Atoi(config.Port)
+		if err != nil {
+			return nil, err
+		}
+
+		if p <= 1023 {
+			config.Endpoint = hostname
+		} else {
+			config.Endpoint = net.JoinHostPort(hostname, config.Port)
+		}
+	}
+
 	return &config, nil
 }
