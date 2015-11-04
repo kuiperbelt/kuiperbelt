@@ -3,8 +3,8 @@ package kuiperbelt
 import (
 	"bytes"
 	"errors"
+	log "gopkg.in/Sirupsen/logrus.v0"
 	"io"
-	"log"
 	"net/http"
 
 	"golang.org/x/net/websocket"
@@ -37,12 +37,17 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
+		status := http.StatusInternalServerError
 		if ce, ok := err.(ConnectCallbackError); ok {
-			w.WriteHeader(ce.Status)
-		} else {
-			w.WriteHeader(http.StatusInternalServerError)
+			status = ce.Status
 		}
+		w.WriteHeader(status)
 		io.WriteString(w, err.Error())
+
+		log.WithFields(log.Fields{
+			"status": status,
+			"error":  err.Error(),
+		}).Error("connect error before upgrade")
 		return
 	}
 
@@ -91,12 +96,16 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 	return func(ws *websocket.Conn) {
 		session, err := s.NewWebSocketSession(resp, ws)
 		if err != nil {
-			log.Println("connect error:", err)
+			log.WithFields(log.Fields{
+				"error": err.Error(),
+			}).Error("connect error after upgrade")
 			return
 		}
 		AddSession(session)
 		defer DelSession(session.Key())
-		log.Println("connected key:", session.Key())
+		log.WithFields(log.Fields{
+			"session_key": session.Key(),
+		}).Info("connected session")
 		session.WaitClose()
 	}
 }
@@ -116,6 +125,7 @@ func (s *WebSocketSession) Key() string {
 }
 
 func (s *WebSocketSession) Close() error {
+	DelSession(s.Key())
 	err := s.Conn.Close()
 	if err != nil {
 		return err
