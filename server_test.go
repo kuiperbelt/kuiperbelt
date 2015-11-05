@@ -91,7 +91,7 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 	}
 }
 
-func TestWebSocketServer__Handler__Failuthorized(t *testing.T) {
+func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.FailHandler))
 
