@@ -3,8 +3,8 @@ package kuiperbelt
 import (
 	"bytes"
 	"encoding/json"
+	log "gopkg.in/Sirupsen/logrus.v0"
 	"io"
-	"log"
 	"net/http"
 )
 
@@ -13,7 +13,10 @@ type Proxy struct {
 }
 
 func (p *Proxy) Register() {
-	http.HandleFunc("/send", p.HandlerFunc)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/send", p.HandlerFunc)
+	l := NewLoggingHandler(mux)
+	http.Handle("/send", l)
 }
 
 func (p *Proxy) HandlerFunc(w http.ResponseWriter, r *http.Request) {
@@ -73,13 +76,25 @@ type sessionError struct {
 func (p *Proxy) sendMessage(s Session, bs []byte) {
 	nw, err := s.Write(bs)
 	if err != nil {
-		log.Printf("[ERROR] write to session error: session=%s, error=%s\n", s.Key(), err)
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("write to session error")
+		err = s.Close()
+		if err != nil {
+			log.WithFields(log.Fields{
+				"session": s.Key(),
+				"error":   err.Error(),
+			}).Error("close session error")
+		}
 		return
 	}
 	if nw != len(bs) {
-		log.Printf(
-			"[ERROR] write to session is short: session=%s, write_byte=%d, return_byte=%d\n",
-			s.Key(), len(bs), nw,
-		)
+		log.WithFields(log.Fields{
+			"session":      s.Key(),
+			"write_bytes":  len(bs),
+			"return_bytes": nw,
+		}).Error("write to session is short")
+		return
 	}
 }
