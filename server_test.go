@@ -5,7 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -123,4 +127,50 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 	if b.String() != "fail authorization!" {
 		t.Error("callback message is not in response")
 	}
+}
+
+func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+
+	c := TestConfig
+	c.Callback.Connect = tcc.URL
+
+	server := WebSocketServer{c}
+
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
+	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost/")
+	if err != nil {
+		t.Fatal("cannot create connection config error:", err)
+	}
+	wsConfig.Header.Add(testRequestSessionHeader, "hogehoge")
+	conn, err := websocket.DialConfig(wsConfig)
+	if err != nil {
+		t.Fatal("cannot connect error:", err)
+	}
+
+	_, err = GetSession("hogehoge")
+	if err != nil {
+		t.Fatal("cannot get session error:", err)
+	}
+
+	_, err = io.WriteString(conn, "barbar")
+	if err != nil {
+		t.Fatal("cannot write to connection error:", err)
+	}
+
+	err = conn.Close()
+	if err != nil {
+		t.Fatal("cannot close connection error:", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	_, err = GetSession("hogehoge")
+	if err != sessionNotFoundError {
+		t.Error("not removed session:", err)
+	}
+
 }

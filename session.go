@@ -33,8 +33,12 @@ func GetSession(key string) (Session, error) {
 	return s, nil
 }
 
-func DelSession(key string) {
+func DelSession(key string) error {
 	sessionMapLocker.Lock()
 	defer sessionMapLocker.Unlock()
+	if _, ok := sessionMap[key]; !ok {
+		return sessionNotFoundError
+	}
 	delete(sessionMap, key)
+	return nil
 }
