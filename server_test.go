@@ -15,6 +15,7 @@ import (
 const (
 	testRequestSessionHeader = "X-Kuiperbelt-Hogehoge"
 	testSecWebSocketKey      = "AQIDBAUGBwgJCgsMDQ4PEA==" // from RFC sample
+	testHelloMessage         = "hello"
 )
 
 type testSuccessConnectCallbackServer struct {
@@ -27,6 +28,7 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 	s.Header = r.Header
 	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
 	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, testHelloMessage)
 }
 
 func (s *testSuccessConnectCallbackServer) FailHandler(w http.ResponseWriter, r *http.Request) {
@@ -150,6 +152,8 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	if err != nil {
 		t.Fatal("cannot connect error:", err)
 	}
+
+	io.CopyN(new(blackholeWriter), conn, int64(len([]byte("hello"))))
 
 	_, err = GetSession("hogehoge")
 	if err != nil {
