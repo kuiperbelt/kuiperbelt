@@ -3,11 +3,14 @@ package kuiperbelt
 import (
 	"bytes"
 	"errors"
-	log "gopkg.in/Sirupsen/logrus.v0"
 	"io"
 	"net/http"
+	"strings"
+	"sync"
 
 	"golang.org/x/net/websocket"
+
+	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
 const (
@@ -61,9 +64,10 @@ func (s *WebSocketServer) Register() {
 
 type WebSocketSession struct {
 	*websocket.Conn
-	key     string
-	closeCh chan struct{}
-	Config  Config
+	key       string
+	closeCh   chan struct{}
+	Config    Config
+	onceClose sync.Once
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
@@ -93,8 +97,12 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 }
 
 func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *websocket.Conn) {
+	defer resp.Body.Close()
+	key := resp.Header.Get(s.Config.SessionHeader)
+	b := new(bytes.Buffer)
+	io.Copy(b, resp.Body)
 	return func(ws *websocket.Conn) {
-		session, err := s.NewWebSocketSession(resp, ws)
+		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"error": err.Error(),
@@ -102,6 +110,8 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			return
 		}
 		AddSession(session)
+		io.Copy(session, b)
+
 		defer DelSession(session.Key())
 		log.WithFields(log.Fields{
 			"session_key": session.Key(),
@@ -111,12 +121,10 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 	}
 }
 
-func (s *WebSocketServer) NewWebSocketSession(resp *http.Response, ws *websocket.Conn) (*WebSocketSession, error) {
-	key := resp.Header.Get(s.Config.SessionHeader)
-	defer resp.Body.Close()
+func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
 	closeCh := make(chan struct{})
-	session := &WebSocketSession{ws, key, closeCh, s.Config}
-	io.Copy(session, resp.Body)
+	onceClose := sync.Once{}
+	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose}
 
 	return session, nil
 }
@@ -126,15 +134,18 @@ func (s *WebSocketSession) Key() string {
 }
 
 func (s *WebSocketSession) Close() error {
-	err := DelSession(s.Key())
-	if err != nil {
-		return err
-	}
-	err = s.Conn.Close()
-	if err != nil {
-		return err
-	}
-	s.closeCh <- struct{}{}
+	var err error
+	s.onceClose.Do(func() {
+		err = DelSession(s.Key())
+		if err != nil {
+			return
+		}
+		err = s.Conn.Close()
+		if err != nil {
+			return
+		}
+		s.closeCh <- struct{}{}
+	})
 	return nil
 }
 
@@ -148,7 +159,12 @@ func (s *WebSocketSession) WatchClose() {
 	if err == io.EOF {
 		return
 	}
+	// ignore closed session error
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "use of closed network connection") {
+			return
+		}
+
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Error("watch close frame error")

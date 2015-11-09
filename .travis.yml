@@ -1,7 +1,6 @@
 language: go
 
-env:
-  - GOMAXPROCS=`nproc`
+gobuild_args: -cpu 2
 
 go:
   - 1.4
