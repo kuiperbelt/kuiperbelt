@@ -1,7 +1,5 @@
 language: go
 
-gobuild_args: -cpu 2
-
 go:
   - 1.4
   - 1.5
