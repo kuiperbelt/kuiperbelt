@@ -106,6 +106,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 		log.WithFields(log.Fields{
 			"session_key": session.Key(),
 		}).Info("connected session")
+		go session.WatchClose()
 		session.WaitClose()
 	}
 }
@@ -125,8 +126,11 @@ func (s *WebSocketSession) Key() string {
 }
 
 func (s *WebSocketSession) Close() error {
-	DelSession(s.Key())
-	err := s.Conn.Close()
+	err := DelSession(s.Key())
+	if err != nil {
+		return err
+	}
+	err = s.Conn.Close()
 	if err != nil {
 		return err
 	}
@@ -136,4 +140,24 @@ func (s *WebSocketSession) Close() error {
 
 func (s *WebSocketSession) WaitClose() {
 	<-s.closeCh
+}
+
+func (s *WebSocketSession) WatchClose() {
+	defer s.Close()
+	_, err := io.Copy(new(blackholeWriter), s)
+	if err == io.EOF {
+		return
+	}
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("watch close frame error")
+	}
+}
+
+type blackholeWriter struct {
+}
+
+func (bw *blackholeWriter) Write(p []byte) (int, error) {
+	return len(p), nil
 }
