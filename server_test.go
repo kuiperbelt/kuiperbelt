@@ -170,9 +170,15 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		t.Fatal("cannot close connection error:", err)
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	for i := 0; i < 5; i++ {
+		time.Sleep(10 * time.Millisecond)
 
-	_, err = GetSession("hogehoge")
+		_, err = GetSession("hogehoge")
+		if err != nil {
+			break
+		}
+	}
+
 	if err != sessionNotFoundError {
 		t.Error("not removed session:", err)
 	}

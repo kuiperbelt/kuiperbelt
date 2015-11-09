@@ -1,5 +1,8 @@
 language: go
 
+env:
+  - GOMAXPROCS=`nproc`
+
 go:
   - 1.4
   - 1.5
