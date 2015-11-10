@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <title>chat sample</title>
+
+    <!-- Bootstrap -->
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css" integrity="sha384-aUGj/X2zp5rLCbBxumKTCw2Z50WgIr1vs/PFN4praOTvYXWlVyh2UtNUU0KAUhAX" crossorigin="anonymous">
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+
+      <div class="page-header">
+        <h1>chat sample</h1>
+
+        <div class="row">
+          <input id="inputMessage" type="text" class="form-control" placeholder="Text input">
+        </div>
+      </div>
+
+      <div class="row">
+        <ul id="messages" class="list-group">
+        </ul>
+      </div>
+    </div>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js" integrity="sha512-K1qjQ+NcF2TYO/eI3M6v8EiNYZfA95pQumfvcVrTHtwQVDG+aHRqLi/ETn2uB+1JqwYqVG3LIvdm9lj6imS/pQ==" crossorigin="anonymous"></script>
+    <script>
+$(document).ready(function(){
+
+var uri = "ws://localhost:12345/connect";
+var uuid = generate_uuid();
+
+$.getJSON("http://localhost:12346/recent", function(data) {
+  var items = [];
+  $.each(data, function( i, val ) {
+    items.push( "<li class='list-group-item'>" + val + "</li>" );
+  });
+  items.reverse();
+
+  $("#messages").prepend(items);
+});
+
+var websocket = new WebSocket(uri+"?uuid="+uuid);
+websocket.onmessage = function(event) {
+  if (event && event.data) {
+    $("#messages").prepend(
+        '<li class="list-group-item">' + event.data + '</li>'
+    );
+  }
+};
+
+$("#inputMessage").keypress(function(event) {
+  if (event.keyCode != "13") {
+    return;
+  }
+  var message = this.value;
+  this.value = "";
+  $.post("http://localhost:12346/post", {
+    message: message,
+  });
+});
+
+});
+
+function generate_uuid() {
+  var uuid = "", i, random;
+  for (i = 0; i < 32; i++) {
+    random = Math.random() * 16 | 0;
+
+    if (i == 8 || i == 12 || i == 16 || i == 20) {
+      uuid += "-"
+    }
+    uuid += (i == 12 ? 4 : (i == 16 ? (random & 3 | 8) : random)).toString(16);
+  }
+  return uuid;
+}
+
+    </script>
+  </body>
+</html>
