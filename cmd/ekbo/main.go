@@ -8,9 +8,11 @@ import (
 )
 
 func main() {
-	var configFilename, logLevel string
+	var configFilename, logLevel, port, sock string
 	flag.StringVar(&configFilename, "config", "config.yml", "config path")
 	flag.StringVar(&logLevel, "log-level", "", "log level")
+	flag.StringVar(&port, "port", "", "launch port")
+	flag.StringVar(&sock, "sock", "", "unix domain socket path")
 	flag.Parse()
 
 	if logLevel != "" {
@@ -22,6 +24,5 @@ func main() {
 		}
 		log.SetLevel(lvl)
 	}
-
-	kuiperbelt.Run(configFilename)
+	kuiperbelt.Run(port, sock, configFilename)
 }
