@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -71,7 +72,12 @@ type WebSocketSession struct {
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
-	callbackRequest, err := http.NewRequest(r.Method, s.Config.Callback.Connect, r.Body)
+	callbackUrl, err := url.ParseRequestURI(s.Config.Callback.Connect)
+	if err != nil {
+		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
+	}
+	callbackUrl.RawQuery = r.URL.RawQuery
+	callbackRequest, err := http.NewRequest(r.Method, callbackUrl.String(), r.Body)
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
@@ -90,6 +96,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
+		resp.Body.Close()
 		return nil, ConnectCallbackError{http.StatusBadRequest, sessionKeyNotExistError}
 	}
 
