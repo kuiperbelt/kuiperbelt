@@ -13,6 +13,7 @@ type Config struct {
 	Callback      Callback `yaml:"callback"`
 	SessionHeader string   `yaml:"session_header"`
 	Port          string   `yaml:"port"`
+	Sock          string   `yaml:"sock"`
 	Endpoint      string   `yaml:"endpoint"`
 }
 
