@@ -1,12 +1,13 @@
 package kuiperbelt
 
 import (
-	log "gopkg.in/Sirupsen/logrus.v0"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
 func Run(port, sock, configFilename string) {
@@ -72,7 +73,7 @@ func startSignalHandler(ln net.Listener) {
 	go func() {
 		for {
 			s := <-signalCh
-			if s == syscall.SIGTERM && s == syscall.SIGINT {
+			if s == syscall.SIGTERM || s == syscall.SIGINT {
 				log.Infof("received SIGTERM. shutting down...")
 				ln.Close()
 			}
