@@ -9,8 +9,8 @@ import (
 )
 
 func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
-	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false}
-	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false}
+	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
+	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
 
 	AddSession(s1)
 	AddSession(s2)
@@ -55,8 +55,8 @@ func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
 }
 
 func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
-	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false}
-	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false}
+	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
+	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
 
 	AddSession(s1)
 	AddSession(s2)

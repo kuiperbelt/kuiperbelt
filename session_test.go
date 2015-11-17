@@ -6,8 +6,9 @@ import (
 
 type TestSession struct {
 	*bytes.Buffer
-	key      string
-	isClosed bool
+	key             string
+	isClosed        bool
+	isNotifiedClose bool
 }
 
 func (s *TestSession) Key() string {
@@ -17,4 +18,8 @@ func (s *TestSession) Key() string {
 func (s *TestSession) Close() error {
 	s.isClosed = true
 	return nil
+}
+
+func (s *TestSession) NotifiedClose(isNotified bool) {
+	s.isNotifiedClose = isNotified
 }
