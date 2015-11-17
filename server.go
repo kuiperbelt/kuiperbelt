@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/websocket"
 
@@ -66,14 +67,6 @@ func (s *WebSocketServer) Register() {
 	}
 
 	http.HandleFunc("/connect", s.Handler)
-}
-
-type WebSocketSession struct {
-	*websocket.Conn
-	key       string
-	closeCh   chan struct{}
-	Config    Config
-	onceClose sync.Once
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
@@ -136,13 +129,26 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
 	closeCh := make(chan struct{})
 	onceClose := sync.Once{}
-	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose}
+	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose, new(atomic.Value)}
 
 	return session, nil
 }
 
+type WebSocketSession struct {
+	*websocket.Conn
+	key             string
+	closeCh         chan struct{}
+	Config          Config
+	onceClose       sync.Once
+	isNotifiedClose *atomic.Value
+}
+
 func (s *WebSocketSession) Key() string {
 	return s.key
+}
+
+func (s *WebSocketSession) NotifiedClose(isNotified bool) {
+	s.isNotifiedClose.Store(isNotified)
 }
 
 func (s *WebSocketSession) Close() error {
@@ -167,9 +173,9 @@ func (s *WebSocketSession) WaitClose() {
 
 func (s *WebSocketSession) WatchClose() {
 	defer s.Close()
+	defer func() { go s.SendCloseCallback() }()
 	_, err := io.Copy(new(blackholeWriter), s)
 	if err == nil {
-		go s.SendCloseCallback()
 		return
 	}
 	// ignore closed session error
@@ -185,6 +191,11 @@ func (s *WebSocketSession) WatchClose() {
 func (s *WebSocketSession) SendCloseCallback() {
 	// cancel sending when not set callback url
 	if s.Config.Callback.Close == "" {
+		return
+	}
+
+	// cancel sending when notified closed already
+	if isNotified, ok := s.isNotifiedClose.Load().(bool); ok && isNotified {
 		return
 	}
 

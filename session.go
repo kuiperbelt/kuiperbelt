@@ -15,6 +15,7 @@ var (
 type Session interface {
 	io.ReadWriteCloser
 	Key() string
+	NotifiedClose(bool)
 }
 
 func AddSession(s Session) {
