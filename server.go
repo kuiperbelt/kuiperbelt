@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	ENDPOINT_HEADER_NAME = "X-Kuiperbelt-Endpoint"
+	ENDPOINT_HEADER_NAME               = "X-Kuiperbelt-Endpoint"
+	CALLBACK_CLIENT_MAX_CONNS_PER_HOST = 32
 )
 
 var (
@@ -60,6 +61,10 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *WebSocketServer) Register() {
+	callbackClient.Transport = &http.Transport{
+		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
+	}
+
 	http.HandleFunc("/connect", s.Handler)
 }
 
@@ -121,7 +126,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 
 		defer DelSession(session.Key())
 		log.WithFields(log.Fields{
-			"session_key": session.Key(),
+			"session": session.Key(),
 		}).Info("connected session")
 		go session.WatchClose()
 		session.WaitClose()
@@ -163,19 +168,59 @@ func (s *WebSocketSession) WaitClose() {
 func (s *WebSocketSession) WatchClose() {
 	defer s.Close()
 	_, err := io.Copy(new(blackholeWriter), s)
-	if err == io.EOF {
+	if err == nil {
+		go s.SendCloseCallback()
 		return
 	}
 	// ignore closed session error
-	if err != nil {
-		if strings.HasSuffix(err.Error(), "use of closed network connection") {
-			return
-		}
-
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("watch close frame error")
+	if strings.HasSuffix(err.Error(), "use of closed network connection") {
+		return
 	}
+
+	log.WithFields(log.Fields{
+		"error": err.Error(),
+	}).Error("watch close frame error")
+}
+
+func (s *WebSocketSession) SendCloseCallback() {
+	// cancel sending when not set callback url
+	if s.Config.Callback.Close == "" {
+		return
+	}
+
+	callbackRequest, err := http.NewRequest("POST", s.Config.Callback.Close, nil)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("cannot create close callback request.")
+		return
+	}
+
+	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
+	resp, err := callbackClient.Do(callbackRequest)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("failed send close callback request.")
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b := new(bytes.Buffer)
+		b.ReadFrom(resp.Body)
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"status":  resp.Status,
+			"error":   b.String(),
+		}).Error("invalid close callback status.")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"session": s.Key(),
+	}).Info("success close callback.")
 }
 
 type blackholeWriter struct {
