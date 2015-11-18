@@ -19,7 +19,7 @@ type Config struct {
 
 type Callback struct {
 	Connect string `yaml:"connect"`
-	Receive string `yaml:"receive"`
+	Close   string `yaml:"close"`
 }
 
 func NewConfig(filename string) (*Config, error) {

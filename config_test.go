@@ -10,14 +10,13 @@ session_header: "X-Kuiperbelt-Session-Key"
 port: 12345
 callback:
   connect: "http://localhost:12346/connect"
-  receive: "http://localhost:12346/receive"
 `)
 var TestConfig = Config{
 	Port:          ":12345",
 	SessionHeader: "X-Kuiperbelt-Session-Key",
 	Callback: Callback{
 		Connect: "http://localhost:12346/connect",
-		Receive: "http://localhost:12346/receive",
+		Close:   "",
 	},
 }
 

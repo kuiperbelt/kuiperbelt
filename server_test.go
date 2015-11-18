@@ -20,6 +20,7 @@ const (
 
 type testSuccessConnectCallbackServer struct {
 	IsCallbacked bool
+	IsClosed     bool
 	Header       http.Header
 }
 
@@ -36,6 +37,13 @@ func (s *testSuccessConnectCallbackServer) FailHandler(w http.ResponseWriter, r 
 	s.Header = r.Header
 	w.WriteHeader(http.StatusForbidden)
 	io.WriteString(w, "fail authorization!")
+}
+
+func (s *testSuccessConnectCallbackServer) CloseHandler(w http.ResponseWriter, r *http.Request) {
+	s.IsClosed = true
+	s.Header = r.Header
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, "")
 }
 
 func newTestWebSocketRequest(url string) (*http.Request, error) {
@@ -133,10 +141,12 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 
 func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	callbackServer := new(testSuccessConnectCallbackServer)
-	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tcc1 := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tcc2 := httptest.NewServer(http.HandlerFunc(callbackServer.CloseHandler))
 
 	c := TestConfig
-	c.Callback.Connect = tcc.URL
+	c.Callback.Connect = tcc1.URL
+	c.Callback.Close = tcc2.URL
 
 	server := WebSocketServer{c}
 
@@ -181,6 +191,10 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 
 	if err != sessionNotFoundError {
 		t.Error("not removed session:", err)
+	}
+
+	if !callbackServer.IsClosed {
+		t.Error("not receive close callback")
 	}
 
 }

@@ -33,6 +33,17 @@ $router->add("/connect", sub {
     return ["200", ["X-Kuiperbelt-Session" => $session], ["joined success"]];
 });
 
+$router->add("/close", sub {
+    my $env = shift;
+    my $req = Plack::Request->new($env);
+
+    my @session = $req->header("X-Kuiperbelt-Session");
+
+    $redis->srem("sessions", @session);
+
+    return ["200", [], ["success closed"]];
+});
+
 $router->add("/recent", sub {
     my $env = shift;
     my $req = Plack::Request->new($env);

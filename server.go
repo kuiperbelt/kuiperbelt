@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/net/websocket"
 
@@ -15,7 +16,8 @@ import (
 )
 
 const (
-	ENDPOINT_HEADER_NAME = "X-Kuiperbelt-Endpoint"
+	ENDPOINT_HEADER_NAME               = "X-Kuiperbelt-Endpoint"
+	CALLBACK_CLIENT_MAX_CONNS_PER_HOST = 32
 )
 
 var (
@@ -60,15 +62,11 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *WebSocketServer) Register() {
-	http.HandleFunc("/connect", s.Handler)
-}
+	callbackClient.Transport = &http.Transport{
+		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
+	}
 
-type WebSocketSession struct {
-	*websocket.Conn
-	key       string
-	closeCh   chan struct{}
-	Config    Config
-	onceClose sync.Once
+	http.HandleFunc("/connect", s.Handler)
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
@@ -121,7 +119,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 
 		defer DelSession(session.Key())
 		log.WithFields(log.Fields{
-			"session_key": session.Key(),
+			"session": session.Key(),
 		}).Info("connected session")
 		go session.WatchClose()
 		session.WaitClose()
@@ -131,13 +129,26 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
 	closeCh := make(chan struct{})
 	onceClose := sync.Once{}
-	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose}
+	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose, new(atomic.Value)}
 
 	return session, nil
 }
 
+type WebSocketSession struct {
+	*websocket.Conn
+	key             string
+	closeCh         chan struct{}
+	Config          Config
+	onceClose       sync.Once
+	isNotifiedClose *atomic.Value
+}
+
 func (s *WebSocketSession) Key() string {
 	return s.key
+}
+
+func (s *WebSocketSession) NotifiedClose(isNotified bool) {
+	s.isNotifiedClose.Store(isNotified)
 }
 
 func (s *WebSocketSession) Close() error {
@@ -162,20 +173,65 @@ func (s *WebSocketSession) WaitClose() {
 
 func (s *WebSocketSession) WatchClose() {
 	defer s.Close()
+	defer func() { go s.SendCloseCallback() }()
 	_, err := io.Copy(new(blackholeWriter), s)
-	if err == io.EOF {
+	if err == nil {
 		return
 	}
 	// ignore closed session error
-	if err != nil {
-		if strings.HasSuffix(err.Error(), "use of closed network connection") {
-			return
-		}
-
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("watch close frame error")
+	if strings.HasSuffix(err.Error(), "use of closed network connection") {
+		return
 	}
+
+	log.WithFields(log.Fields{
+		"error": err.Error(),
+	}).Error("watch close frame error")
+}
+
+func (s *WebSocketSession) SendCloseCallback() {
+	// cancel sending when not set callback url
+	if s.Config.Callback.Close == "" {
+		return
+	}
+
+	// cancel sending when notified closed already
+	if isNotified, ok := s.isNotifiedClose.Load().(bool); ok && isNotified {
+		return
+	}
+
+	callbackRequest, err := http.NewRequest("POST", s.Config.Callback.Close, nil)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("cannot create close callback request.")
+		return
+	}
+
+	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
+	resp, err := callbackClient.Do(callbackRequest)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("failed send close callback request.")
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b := new(bytes.Buffer)
+		b.ReadFrom(resp.Body)
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"status":  resp.Status,
+			"error":   b.String(),
+		}).Error("invalid close callback status.")
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"session": s.Key(),
+	}).Info("success close callback.")
 }
 
 type blackholeWriter struct {

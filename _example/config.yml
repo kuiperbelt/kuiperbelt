@@ -1,4 +1,4 @@
 port: 12345
 callback:
   connect: "http://localhost:12346/connect"
-  receive: "http://localhost:12346/receive"
+  close: "http://localhost:12346/close"

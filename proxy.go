@@ -144,6 +144,7 @@ func (p *Proxy) closeSession(s Session, bs []byte) {
 	if err != nil {
 		return
 	}
+	s.NotifiedClose(true)
 	err = s.Close()
 	if err != nil {
 		log.WithFields(log.Fields{
