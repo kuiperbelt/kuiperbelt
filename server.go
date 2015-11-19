@@ -24,6 +24,10 @@ var (
 	sessionKeyNotExistError            = errors.New("session key is not exist.")
 	connectCallbackIsNotAvailableError = errors.New("connect callback is not available.")
 	callbackClient                     = new(http.Client)
+	sendWsCodec                        = websocket.Codec{
+		Marshal:   messageMarshal,
+		Unmarshal: nil,
+	}
 )
 
 type ConnectCallbackError struct {
@@ -106,6 +110,10 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 	key := resp.Header.Get(s.Config.SessionHeader)
 	b := new(bytes.Buffer)
 	io.Copy(b, resp.Body)
+	message := &Message{
+		buf:         b,
+		contentType: resp.Header.Get("Content-Type"),
+	}
 	return func(ws *websocket.Conn) {
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
@@ -115,7 +123,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			return
 		}
 		AddSession(session)
-		io.Copy(session, b)
+		session.SendMessage(message)
 
 		defer DelSession(session.Key())
 		log.WithFields(log.Fields{
@@ -232,6 +240,29 @@ func (s *WebSocketSession) SendCloseCallback() {
 	log.WithFields(log.Fields{
 		"session": s.Key(),
 	}).Info("success close callback.")
+}
+
+func (s *WebSocketSession) SendMessage(message *Message) error {
+	return sendWsCodec.Send(s.Conn, message)
+}
+
+type Message struct {
+	buf         *bytes.Buffer
+	contentType string
+}
+
+func messageMarshal(v interface{}) ([]byte, byte, error) {
+	message, ok := v.(*Message)
+	if !ok {
+		return nil, 0x0, errors.New("value is not *kuiperbelt.Message.")
+	}
+
+	payloadType := byte(websocket.TextFrame)
+	if message.contentType == "application/octet-stream" {
+		payloadType = websocket.BinaryFrame
+	}
+
+	return message.buf.Bytes(), payloadType, nil
 }
 
 type blackholeWriter struct {
