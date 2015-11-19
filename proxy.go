@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	log "gopkg.in/Sirupsen/logrus.v0"
 	"io"
 	"net/http"
+
+	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
 var (
@@ -74,10 +75,13 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(b, r.Body)
 	if err != nil {
 	}
-	bs := b.Bytes()
+	message := &Message{
+		buf:         b,
+		contentType: r.Header.Get("Content-Type"),
+	}
 
 	for _, s := range ss {
-		go p.sendMessage(s, bs)
+		go p.sendMessage(s, message)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -96,10 +100,13 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	_, err = io.Copy(b, r.Body)
 	if err != nil {
 	}
-	bs := b.Bytes()
+	message := &Message{
+		buf:         b,
+		contentType: r.Header.Get("Content-Type"),
+	}
 
 	for _, s := range ss {
-		go p.closeSession(s, bs)
+		go p.closeSession(s, message)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -111,8 +118,22 @@ type sessionError struct {
 	Session string `json:"session"`
 }
 
-func (p *Proxy) sendMessage(s Session, bs []byte) error {
-	nw, err := s.Write(bs)
+func (p *Proxy) sendMessage(s Session, message *Message) error {
+	var err error
+	if wss, ok := s.(*WebSocketSession); ok {
+		err = wss.SendMessage(message)
+	} else {
+		var nw int
+		nw, err = s.Write(message.buf.Bytes())
+		if nw != message.buf.Len() {
+			log.WithFields(log.Fields{
+				"session":      s.Key(),
+				"write_bytes":  message.buf.Len(),
+				"return_bytes": nw,
+			}).Error("write to session is short")
+			return cannotSendMessageError
+		}
+	}
 	if err != nil {
 		log.WithFields(log.Fields{
 			"session": s.Key(),
@@ -127,20 +148,12 @@ func (p *Proxy) sendMessage(s Session, bs []byte) error {
 		}
 		return cannotSendMessageError
 	}
-	if nw != len(bs) {
-		log.WithFields(log.Fields{
-			"session":      s.Key(),
-			"write_bytes":  len(bs),
-			"return_bytes": nw,
-		}).Error("write to session is short")
-		return cannotSendMessageError
-	}
 
 	return nil
 }
 
-func (p *Proxy) closeSession(s Session, bs []byte) {
-	err := p.sendMessage(s, bs)
+func (p *Proxy) closeSession(s Session, message *Message) {
+	err := p.sendMessage(s, message)
 	if err != nil {
 		return
 	}
