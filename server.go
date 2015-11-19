@@ -123,7 +123,9 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			return
 		}
 		AddSession(session)
-		session.SendMessage(message)
+		if message.buf.Len() > 0 {
+			session.SendMessage(message)
+		}
 
 		defer DelSession(session.Key())
 		log.WithFields(log.Fields{
