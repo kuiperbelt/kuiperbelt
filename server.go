@@ -260,7 +260,12 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	}
 
 	payloadType := byte(websocket.TextFrame)
-	if message.contentType == "application/octet-stream" {
+	contentType := message.contentType
+	if i := strings.Index(contentType, ";"); i >= 0 {
+		contentType = contentType[0:i]
+	}
+	contentType = strings.TrimSpace(contentType)
+	if strings.EqualFold(contentType, "application/octet-stream") {
 		payloadType = websocket.BinaryFrame
 	}
 

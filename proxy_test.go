@@ -95,7 +95,7 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal("creadrequest unexpected error:", err)
 	}
-	req.Header.Add("Content-Type", "application/octet-stream")
+	req.Header.Add("Content-Type", "APPLICATION/octet-stream ;param=foobar")
 	req.Header.Add(tc.SessionHeader, "hogehoge")
 	_, err = http.DefaultClient.Do(req)
 	if err != nil {
