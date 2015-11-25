@@ -68,29 +68,33 @@ func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Sessio
 	return ss, nil
 }
 
+func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSessionKeysError, ss []Session) {
+	res := struct {
+		Errors []sessionError `json:"errors"`
+		Result string         `json:"result"`
+	}{
+		Errors: se,
+	}
+
+	if p.Config.StrictBroadcast || len(ss) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		res.Result = "NG"
+	} else {
+		w.WriteHeader(http.StatusOK)
+		res.Result = "OK"
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.Encode(res)
+}
+
 func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	ss, err := p.handlerPreHook(w, r)
 	if se, ok := err.(cannotFindSessionKeysError); ok {
-		res := struct {
-			Errors []sessionError `json:"errors"`
-			Result string         `json:"result"`
-		}{
-			Errors: se,
-		}
-
-		if p.Config.StrictBroadcast || len(ss) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			res.Result = "NG"
-		} else {
-			w.WriteHeader(http.StatusOK)
-			res.Result = "OK"
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		enc := json.NewEncoder(w)
-		enc.Encode(res)
+		p.sessionKeysErrorHandler(w, se, ss)
 		if p.Config.StrictBroadcast {
 			return
 		}
@@ -119,8 +123,16 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	ss, err := p.handlerPreHook(w, r)
-	if err != nil {
+	if se, ok := err.(cannotFindSessionKeysError); ok {
+		p.sessionKeysErrorHandler(w, se, ss)
+		if p.Config.StrictBroadcast {
+			return
+		}
+	} else if err != nil {
 		return
+	} else {
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, `{"result":"OK"}`)
 	}
 
 	b := new(bytes.Buffer)
@@ -135,9 +147,6 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	for _, s := range ss {
 		go p.closeSession(s, message)
 	}
-
-	w.WriteHeader(http.StatusOK)
-	io.WriteString(w, `{"result":"OK"}`)
 }
 
 type sessionError struct {
