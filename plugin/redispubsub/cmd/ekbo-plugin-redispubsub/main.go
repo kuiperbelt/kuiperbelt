@@ -10,7 +10,7 @@ import (
 func main() {
 	p, err := redispubsub.NewPlugin()
 	if err != nil {
-		log.Fatalf("redispubsub plugin error: %s", err)
+		log.Fatalf("redispubsub new plugin error: %s", err)
 	}
 	pingo.Register(p)
 	pingo.Run()
