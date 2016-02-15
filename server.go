@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/net/websocket"
 
+	"github.com/dullgiulio/pingo"
+	"github.com/mackee/kuiperbelt/plugin"
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
@@ -41,6 +43,7 @@ func (e ConnectCallbackError) Error() string {
 
 type WebSocketServer struct {
 	Config Config
+	Plugin *pingo.Plugin
 }
 
 func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
@@ -123,6 +126,23 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			return
 		}
 		AddSession(session)
+		if s.Plugin != nil {
+			args := plugin.RelayArgs{Keys: []string{session.Key()}}
+			resp := plugin.RelayResp{}
+			s.Plugin.Call("Plugin.RegisterKeys", args, &resp)
+			log.WithFields(log.Fields{
+				"register_keys":   session.Key(),
+				"registered_keys": resp.RegisteredKeys,
+			}).Info("plugin register keys")
+			defer func() {
+				resp := plugin.RelayResp{}
+				s.Plugin.Call("Plugin.RemoveKeys", args, &resp)
+				log.WithFields(log.Fields{
+					"deletion_key":    session.Key(),
+					"registered_keys": resp.RegisteredKeys,
+				}).Info("plugin deletion keys")
+			}()
+		}
 		if message.buf.Len() > 0 {
 			session.SendMessage(message)
 		}
