@@ -1,6 +1,9 @@
 .PHONY: all
 
-all: ekbo plugins
+all: deps ekbo plugins
+
+deps:
+	go get -d -v ./...
 
 ekbo:
 	go build -v -o ./bin/ekbo ./cmd/ekbo
