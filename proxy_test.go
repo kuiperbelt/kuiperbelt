@@ -20,7 +20,7 @@ func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
 	AddSession(s2)
 
 	tc := TestConfig
-	p := Proxy{tc}
+	p := Proxy{Config: tc}
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -64,9 +64,9 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 
 	tc := TestConfig
 	tc.Callback.Connect = tcc.URL
-	p := Proxy{tc}
+	p := Proxy{Config: tc}
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
-	server := WebSocketServer{tc}
+	server := WebSocketServer{Config: tc}
 	th := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
@@ -117,7 +117,7 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 	AddSession(s2)
 
 	tc := TestConfig
-	p := Proxy{tc}
+	p := Proxy{Config: tc}
 	ts := httptest.NewServer(http.HandlerFunc(p.CloseHandlerFunc))
 	defer ts.Close()
 
