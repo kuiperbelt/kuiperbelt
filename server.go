@@ -2,6 +2,7 @@ package kuiperbelt
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net/http"
@@ -245,12 +246,14 @@ func (s *WebSocketSession) SendCloseCallback() {
 }
 
 func (s *WebSocketSession) SendMessage(message *Message) error {
+	message.session = s.key
 	return sendWsCodec.Send(s.Conn, message)
 }
 
 type Message struct {
 	buf         *bytes.Buffer
 	contentType string
+	session     string
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
@@ -267,6 +270,19 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	contentType = strings.TrimSpace(contentType)
 	if strings.EqualFold(contentType, "application/octet-stream") {
 		payloadType = websocket.BinaryFrame
+	}
+
+	switch payloadType {
+	case websocket.TextFrame:
+		log.WithFields(log.Fields{
+			"session": message.session,
+			"message": message.buf.String(),
+		}).Debug("write messege to session")
+	case websocket.BinaryFrame:
+		log.WithFields(log.Fields{
+			"session": message.session,
+			"message": hex.EncodeToString(message.buf.Bytes()),
+		}).Debug("write messege to session")
 	}
 
 	return message.buf.Bytes(), payloadType, nil
