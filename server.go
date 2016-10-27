@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -84,11 +85,23 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
-	callbackRequest.Header = r.Header
+	// copy all headers except "Connection", "Upgrade" and "Sec-Websocket*"
+	for _n, values := range r.Header {
+		n := strings.ToLower(_n)
+		if n == "connection" || n == "upgrade" || strings.HasPrefix(n, "sec-websocket") {
+			continue
+		}
+		for _, value := range values {
+			callbackRequest.Header.Add(n, value)
+		}
+	}
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
-		return nil, ConnectCallbackError{http.StatusBadGateway, connectCallbackIsNotAvailableError}
+		return nil, ConnectCallbackError{
+			http.StatusBadGateway,
+			fmt.Errorf("%s %s", connectCallbackIsNotAvailableError, err),
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
