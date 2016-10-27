@@ -35,6 +35,7 @@ func (p *Proxy) Register() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", p.SendHandlerFunc)
 	mux.HandleFunc("/close", p.CloseHandlerFunc)
+	mux.HandleFunc("/ping", p.PingHandlerFunc)
 	l := NewLoggingHandler(mux)
 	http.Handle("/", l)
 }
@@ -147,6 +148,11 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	for _, s := range ss {
 		go p.closeSession(s, message)
 	}
+}
+
+func (p *Proxy) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	io.WriteString(w, `{"result":"OK"}`)
 }
 
 type sessionError struct {
