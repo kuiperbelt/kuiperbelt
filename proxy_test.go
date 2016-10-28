@@ -183,6 +183,10 @@ func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		// StrictBroadcast == false returns always OK
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
 	dec := json.NewDecoder(resp.Body)
 	result := struct {
 		Result string        `json:"result"`
@@ -224,6 +228,10 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
 		t.Fatal("proxy handler request unexpected error:", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		// StrictBroadcast == true returns Bad Request if requested sessions missing
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
 
 	dec := json.NewDecoder(resp.Body)
 	result := struct {
@@ -269,6 +277,10 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 		t.Fatal("proxy handler request unexpected error:", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		// StrictBroadcast == true returns Bad Request if requested sessions missing
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
 
 	dec := json.NewDecoder(resp.Body)
 	result := struct {
