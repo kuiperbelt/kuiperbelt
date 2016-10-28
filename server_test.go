@@ -27,6 +27,20 @@ type testSuccessConnectCallbackServer struct {
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
 	s.IsCallbacked = true
 	s.Header = r.Header
+	if r.Header.Get("Connection") == "upgrade" {
+		http.Error(w, "Connection header is upgrade", http.StatusBadRequest)
+		return
+	}
+	if r.Header.Get("Upgrade") != "" {
+		http.Error(w, "Upgrade header is sent", http.StatusBadRequest)
+		return
+	}
+	for n, _ := range r.Header {
+		if strings.HasPrefix(strings.ToLower(n), "sec-websocket") {
+			http.Error(w, n+" header is sent", http.StatusBadRequest)
+			return
+		}
+	}
 	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, testHelloMessage)
