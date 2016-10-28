@@ -161,3 +161,146 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 		t.Fatalf("proxy handler s1 is not closed")
 	}
 }
+
+func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
+	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
+	AddSession(s1)
+
+	tc := TestConfig // StrictBroadcast == false (default)
+	p := Proxy{tc}
+	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehog") // missing "e" invalid session
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// StrictBroadcast == false returns always OK
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string        `json:"result"`
+		Errors []interface{} `json:"errors,omitempty"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "OK" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if s1.String() == "test message" {
+		t.Fatalf("proxy handler s1 must not receive message: %s", s1.String())
+	}
+}
+
+func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
+	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
+	AddSession(s1)
+
+	tc := TestConfig
+	tc.StrictBroadcast = true
+	p := Proxy{tc}
+	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehog") // missing "e" invalid session
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		// StrictBroadcast == true returns Bad Request if requested sessions missing
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string        `json:"result"`
+		Errors []interface{} `json:"errors,omitempty"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "NG" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if s1.String() == "test message" {
+		t.Fatalf("proxy handler s1 must not receive message: %s", s1.String())
+	}
+}
+
+func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
+	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
+	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
+	AddSession(s1)
+	AddSession(s2)
+
+	tc := TestConfig
+	tc.StrictBroadcast = true
+	p := Proxy{tc}
+	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehog") // missing "e" invalid session
+	req.Header.Add(tc.SessionHeader, "fugafuga")
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		// StrictBroadcast == true returns Bad Request if requested sessions missing
+		t.Fatal("proxy handler response unexpected status:", resp.StatusCode)
+	}
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string        `json:"result"`
+		Errors []interface{} `json:"errors,omitempty"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "NG" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if s1.String() == "test message" {
+		t.Fatalf("proxy handler s1 must not receive message: %s", s1.String())
+	}
+	if s2.String() == "test message" {
+		t.Fatalf("proxy handler s2 must not receive message: %s", s1.String())
+	}
+}
