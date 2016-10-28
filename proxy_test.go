@@ -304,3 +304,33 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 		t.Fatalf("proxy handler s2 must not receive message: %s", s1.String())
 	}
 }
+
+func TestProxyPingHandlerFunc(t *testing.T) {
+	tc := TestConfig
+	p := Proxy{tc}
+	ts := httptest.NewServer(http.HandlerFunc(p.PingHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("GET", ts.URL, nil)
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string `json:"result"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "OK" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+}
