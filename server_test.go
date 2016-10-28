@@ -82,7 +82,7 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := WebSocketServer{c}
+	server := NewWebSocketServer(c, NewStats())
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -126,7 +126,7 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := WebSocketServer{c}
+	server := NewWebSocketServer(c, NewStats())
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -162,7 +162,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	c.Callback.Connect = tcc1.URL
 	c.Callback.Close = tcc2.URL
 
-	server := WebSocketServer{c}
+	server := NewWebSocketServer(c, NewStats())
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 

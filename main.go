@@ -27,10 +27,12 @@ func Run(port, sock, configFilename string) {
 		c.Port = port
 	}
 
-	p := &Proxy{*c}
+	st := NewStats()
+
+	p := NewProxy(*c, st)
 	p.Register()
 
-	s := &WebSocketServer{*c}
+	s := NewWebSocketServer(*c, st)
 	s.Register()
 
 	var ln net.Listener
