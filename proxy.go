@@ -29,6 +29,14 @@ func (e cannotFindSessionKeysError) Error() string {
 
 type Proxy struct {
 	Config Config
+	Stats  *Stats
+}
+
+func NewProxy(c Config, s *Stats) *Proxy {
+	return &Proxy{
+		Config: c,
+		Stats:  s,
+	}
 }
 
 func (p *Proxy) Register() {
@@ -155,6 +163,7 @@ type sessionError struct {
 }
 
 func (p *Proxy) sendMessage(s Session, message *Message) error {
+	p.Stats.MessageEvent()
 	var err error
 	if wss, ok := s.(*WebSocketSession); ok {
 		err = wss.SendMessage(message)
@@ -162,6 +171,7 @@ func (p *Proxy) sendMessage(s Session, message *Message) error {
 		var nw int
 		nw, err = s.Write(message.buf.Bytes())
 		if nw != message.buf.Len() {
+			p.Stats.MessageErrorEvent()
 			log.WithFields(log.Fields{
 				"session":      s.Key(),
 				"write_bytes":  message.buf.Len(),
@@ -171,6 +181,7 @@ func (p *Proxy) sendMessage(s Session, message *Message) error {
 		}
 	}
 	if err != nil {
+		p.Stats.MessageErrorEvent()
 		log.WithFields(log.Fields{
 			"session": s.Key(),
 			"error":   err.Error(),

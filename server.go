@@ -42,12 +42,25 @@ func (e ConnectCallbackError) Error() string {
 
 type WebSocketServer struct {
 	Config Config
+	Stats  *Stats
+}
+
+func NewWebSocketServer(c Config, s *Stats) *WebSocketServer {
+	return &WebSocketServer{
+		Config: c,
+		Stats:  s,
+	}
 }
 
 func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+
+	s.Stats.ConnectEvent()
+	defer s.Stats.DisconnectEvent()
+
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
+		defer s.Stats.ConnectErrorEvent()
 		status := http.StatusInternalServerError
 		if ce, ok := err.(ConnectCallbackError); ok {
 			status = ce.Status
@@ -70,8 +83,19 @@ func (s *WebSocketServer) Register() {
 	callbackClient.Transport = &http.Transport{
 		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
 	}
-
 	http.HandleFunc("/connect", s.Handler)
+	http.HandleFunc("/stats", s.StatsHandler)
+}
+
+func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	err := s.Stats.Dump(w)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("stats dump failed")
+		http.Error(w, `{"result":"ERROR"}`, http.StatusInternalServerError)
+	}
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
@@ -121,10 +145,12 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			log.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Error("connect error after upgrade")
+			s.Stats.ConnectErrorEvent()
 			return
 		}
 		AddSession(session)
 		if message.buf.Len() > 0 {
+			s.Stats.MessageEvent()
 			session.SendMessage(message)
 		}
 
