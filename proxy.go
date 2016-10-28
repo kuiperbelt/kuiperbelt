@@ -77,7 +77,7 @@ func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSess
 		Errors: se,
 	}
 
-	if p.Config.StrictBroadcast || len(ss) == 0 {
+	if p.Config.StrictBroadcast && len(se) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		res.Result = "NG"
 	} else {
