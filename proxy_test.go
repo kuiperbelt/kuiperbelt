@@ -168,7 +168,7 @@ func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 	AddSession(s1)
 
 	tc := TestConfig // StrictBroadcast == false (default)
-	p := Proxy{tc}
+	p := NewProxy(tc, NewStats())
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -214,7 +214,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := Proxy{tc}
+	p := NewProxy(tc, NewStats())
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -262,7 +262,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := Proxy{tc}
+	p := NewProxy(tc, NewStats())
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -308,7 +308,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 
 func TestProxyPingHandlerFunc(t *testing.T) {
 	tc := TestConfig
-	p := Proxy{tc}
+	p := NewProxy(tc, NewStats())
 	ts := httptest.NewServer(http.HandlerFunc(p.PingHandlerFunc))
 	defer ts.Close()
 
