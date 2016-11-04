@@ -33,12 +33,22 @@ func (e cannotFindSessionKeysError) Error() string {
 type Proxy struct {
 	Config Config
 	Plugin *pingo.Plugin
+	Stats  *Stats
+}
+
+func NewProxy(c Config, s *Stats, p *pingo.Plugin) *Proxy {
+	return &Proxy{
+		Config: c,
+		Stats:  s,
+		Plugin: p,
+	}
 }
 
 func (p *Proxy) Register() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", p.SendHandlerFunc)
 	mux.HandleFunc("/close", p.CloseHandlerFunc)
+	mux.HandleFunc("/ping", p.PingHandlerFunc)
 	l := NewLoggingHandler(mux)
 	http.Handle("/", l)
 
@@ -108,7 +118,7 @@ func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSess
 		Errors: se,
 	}
 
-	if p.Config.StrictBroadcast || len(ss) == 0 {
+	if p.Config.StrictBroadcast && len(se) > 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		res.Result = "NG"
 	} else {
@@ -220,12 +230,18 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *Proxy) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	io.WriteString(w, `{"result":"OK"}`)
+}
+
 type sessionError struct {
 	Error   string `json:"error"`
 	Session string `json:"session"`
 }
 
 func (p *Proxy) sendMessage(s Session, message *Message) error {
+	p.Stats.MessageEvent()
 	var err error
 	if wss, ok := s.(*WebSocketSession); ok {
 		err = wss.SendMessage(message)
@@ -233,6 +249,7 @@ func (p *Proxy) sendMessage(s Session, message *Message) error {
 		var nw int
 		nw, err = s.Write(message.buf.Bytes())
 		if nw != message.buf.Len() {
+			p.Stats.MessageErrorEvent()
 			log.WithFields(log.Fields{
 				"session":      s.Key(),
 				"write_bytes":  message.buf.Len(),
@@ -242,6 +259,7 @@ func (p *Proxy) sendMessage(s Session, message *Message) error {
 		}
 	}
 	if err != nil {
+		p.Stats.MessageErrorEvent()
 		log.WithFields(log.Fields{
 			"session": s.Key(),
 			"error":   err.Error(),

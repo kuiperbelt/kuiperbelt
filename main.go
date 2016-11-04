@@ -33,10 +33,12 @@ func Run(port, sock, configFilename string, plugin *pingo.Plugin) {
 		defer plugin.Stop()
 	}
 
-	p := &Proxy{*c, plugin}
+	st := NewStats()
+
+	p := NewProxy(*c, st, plugin)
 	p.Register()
 
-	s := &WebSocketServer{*c, plugin}
+	s := NewWebSocketServer(*c, st, plugin)
 	s.Register()
 
 	var ln net.Listener

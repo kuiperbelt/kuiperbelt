@@ -2,7 +2,9 @@ package kuiperbelt
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,12 +46,26 @@ func (e ConnectCallbackError) Error() string {
 type WebSocketServer struct {
 	Config Config
 	Plugin *pingo.Plugin
+	Stats  *Stats
+}
+
+func NewWebSocketServer(c Config, s *Stats, p *pingo.Plugin) *WebSocketServer {
+	return &WebSocketServer{
+		Config: c,
+		Stats:  s,
+		Plugin: p,
+	}
 }
 
 func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
+
+	s.Stats.ConnectEvent()
+	defer s.Stats.DisconnectEvent()
+
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
+		defer s.Stats.ConnectErrorEvent()
 		status := http.StatusInternalServerError
 		if ce, ok := err.(ConnectCallbackError); ok {
 			status = ce.Status
@@ -72,8 +88,19 @@ func (s *WebSocketServer) Register() {
 	callbackClient.Transport = &http.Transport{
 		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
 	}
-
 	http.HandleFunc("/connect", s.Handler)
+	http.HandleFunc("/stats", s.StatsHandler)
+}
+
+func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	err := s.Stats.Dump(w)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"error": err.Error(),
+		}).Error("stats dump failed")
+		http.Error(w, `{"result":"ERROR"}`, http.StatusInternalServerError)
+	}
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
@@ -86,11 +113,23 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
-	callbackRequest.Header = r.Header
+	// copy all headers except "Connection", "Upgrade" and "Sec-Websocket*"
+	for _n, values := range r.Header {
+		n := strings.ToLower(_n)
+		if n == "connection" || n == "upgrade" || strings.HasPrefix(n, "sec-websocket") {
+			continue
+		}
+		for _, value := range values {
+			callbackRequest.Header.Add(n, value)
+		}
+	}
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
-		return nil, ConnectCallbackError{http.StatusBadGateway, connectCallbackIsNotAvailableError}
+		return nil, ConnectCallbackError{
+			http.StatusBadGateway,
+			fmt.Errorf("%s %s", connectCallbackIsNotAvailableError, err),
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -123,6 +162,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			log.WithFields(log.Fields{
 				"error": err.Error(),
 			}).Error("connect error after upgrade")
+			s.Stats.ConnectErrorEvent()
 			return
 		}
 		AddSession(session)
@@ -144,6 +184,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			}()
 		}
 		if message.buf.Len() > 0 {
+			s.Stats.MessageEvent()
 			session.SendMessage(message)
 		}
 
@@ -265,12 +306,14 @@ func (s *WebSocketSession) SendCloseCallback() {
 }
 
 func (s *WebSocketSession) SendMessage(message *Message) error {
+	message.session = s.key
 	return sendWsCodec.Send(s.Conn, message)
 }
 
 type Message struct {
 	buf         *bytes.Buffer
 	contentType string
+	session     string
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
@@ -287,6 +330,19 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	contentType = strings.TrimSpace(contentType)
 	if strings.EqualFold(contentType, "application/octet-stream") {
 		payloadType = websocket.BinaryFrame
+	}
+
+	switch payloadType {
+	case websocket.TextFrame:
+		log.WithFields(log.Fields{
+			"session": message.session,
+			"message": message.buf.String(),
+		}).Debug("write messege to session")
+	case websocket.BinaryFrame:
+		log.WithFields(log.Fields{
+			"session": message.session,
+			"message": hex.EncodeToString(message.buf.Bytes()),
+		}).Debug("write messege to session")
 	}
 
 	return message.buf.Bytes(), payloadType, nil
