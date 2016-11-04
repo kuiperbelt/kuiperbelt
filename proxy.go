@@ -8,6 +8,9 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/mackee/kuiperbelt/plugin"
+
+	"github.com/dullgiulio/pingo"
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
@@ -29,13 +32,15 @@ func (e cannotFindSessionKeysError) Error() string {
 
 type Proxy struct {
 	Config Config
+	Plugin *pingo.Plugin
 	Stats  *Stats
 }
 
-func NewProxy(c Config, s *Stats) *Proxy {
+func NewProxy(c Config, s *Stats, p *pingo.Plugin) *Proxy {
 	return &Proxy{
 		Config: c,
 		Stats:  s,
+		Plugin: p,
 	}
 }
 
@@ -46,6 +51,34 @@ func (p *Proxy) Register() {
 	mux.HandleFunc("/ping", p.PingHandlerFunc)
 	l := NewLoggingHandler(mux)
 	http.Handle("/", l)
+
+	if p.Plugin != nil {
+		go p.pollMessageFromPlugin()
+	}
+}
+
+func (p *Proxy) pollMessageFromPlugin() {
+	for {
+		message := plugin.ReceivedMessage{}
+		err := p.Plugin.Call("Plugin.ReceiveMessage", plugin.RelayArgs{}, &message)
+		if err != nil {
+			log.WithError(err).Fatalln("plugin receive message error")
+		}
+		log.WithFields(log.Fields{
+			"message": message,
+		}).Infoln("plugin received message")
+		for _, key := range message.Keys {
+			session, err := GetSession(key)
+			if err != nil {
+				log.WithError(err).Warnln("get session from plugin error")
+			}
+			b := bytes.NewBuffer(message.Message)
+			sendingMessage := &Message{
+				buf: b,
+			}
+			go p.sendMessage(session, sendingMessage)
+		}
+	}
 }
 
 func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Session, error) {
@@ -98,11 +131,59 @@ func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSess
 	enc.Encode(res)
 }
 
+func (p *Proxy) tryRelayMessages(b []byte, se cannotFindSessionKeysError) error {
+	var keys []string
+	for _, s := range se {
+		keys = append(keys, s.Session)
+	}
+	args := plugin.RelayArgs{Keys: keys, Message: b}
+	resp := plugin.RelayResp{}
+	p.Plugin.Call("Plugin.Relay", args, &resp)
+	if len(resp.NotExistsKeys) > 0 {
+		se = cannotFindSessionKeysError{}
+		errKeys := resp.NotExistsKeys
+		for _, key := range errKeys {
+			se = append(
+				se,
+				sessionError{
+					Error:   sessionNotFoundError.Error(),
+					Session: key,
+				},
+			)
+		}
+		return se
+	}
+	return nil
+}
+
 func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
+	b := new(bytes.Buffer)
+	_, err := io.Copy(b, r.Body)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": r.Body,
+			"error":   err.Error(),
+		}).Error("copy from body error")
+		return
+	}
+
+	message := &Message{
+		buf:         b,
+		contentType: r.Header.Get("Content-Type"),
+	}
 	ss, err := p.handlerPreHook(w, r)
 	if se, ok := err.(cannotFindSessionKeysError); ok {
+		if p.Plugin != nil {
+			err := p.tryRelayMessages(b.Bytes(), se)
+			if tryError, ok := err.(cannotFindSessionKeysError); ok {
+				se = tryError
+			} else if err != nil {
+				log.WithError(err).Error("try relay message error")
+				return
+			}
+		}
 		p.sessionKeysErrorHandler(w, se, ss)
 		if p.Config.StrictBroadcast {
 			return
@@ -112,15 +193,6 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusOK)
 		io.WriteString(w, `{"result":"OK"}`)
-	}
-
-	b := new(bytes.Buffer)
-	_, err = io.Copy(b, r.Body)
-	if err != nil {
-	}
-	message := &Message{
-		buf:         b,
-		contentType: r.Header.Get("Content-Type"),
 	}
 
 	for _, s := range ss {

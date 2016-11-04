@@ -7,10 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/dullgiulio/pingo"
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
-func Run(port, sock, configFilename string) {
+func Run(port, sock, configFilename string, plugin *pingo.Plugin) {
 	if port != "" && sock != "" {
 		log.Fatal("port and sock option is duplicate.")
 	}
@@ -27,12 +28,17 @@ func Run(port, sock, configFilename string) {
 		c.Port = port
 	}
 
+	if plugin != nil {
+		plugin.Start()
+		defer plugin.Stop()
+	}
+
 	st := NewStats()
 
-	p := NewProxy(*c, st)
+	p := NewProxy(*c, st, plugin)
 	p.Register()
 
-	s := NewWebSocketServer(*c, st)
+	s := NewWebSocketServer(*c, st, plugin)
 	s.Register()
 
 	var ln net.Listener

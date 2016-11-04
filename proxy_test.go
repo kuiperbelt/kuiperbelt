@@ -20,7 +20,7 @@ func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
 	AddSession(s2)
 
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -65,9 +65,9 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 	tc := TestConfig
 	tc.Callback.Connect = tcc.URL
 	st := NewStats()
-	p := NewProxy(tc, st)
+	p := NewProxy(tc, st, nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
-	server := NewWebSocketServer(tc, st)
+	server := NewWebSocketServer(tc, st, nil)
 	th := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
@@ -118,7 +118,7 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 	AddSession(s2)
 
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.CloseHandlerFunc))
 	defer ts.Close()
 
@@ -168,7 +168,7 @@ func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 	AddSession(s1)
 
 	tc := TestConfig // StrictBroadcast == false (default)
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -214,7 +214,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -262,7 +262,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -308,7 +308,7 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 
 func TestProxyPingHandlerFunc(t *testing.T) {
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), nil)
 	ts := httptest.NewServer(http.HandlerFunc(p.PingHandlerFunc))
 	defer ts.Close()
 
