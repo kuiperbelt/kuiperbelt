@@ -10,6 +10,8 @@ import (
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
+var Version string
+
 func Run(port, sock, configFilename string) {
 	if port != "" && sock != "" {
 		log.Fatal("port and sock option is duplicate.")
