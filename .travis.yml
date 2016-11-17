@@ -5,5 +5,5 @@ go:
   - 1.7
   - tip
 
-installl:
+install:
   - make get-deps
