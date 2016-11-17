@@ -89,8 +89,16 @@ func (s *WebSocketServer) Register() {
 }
 
 func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	err := s.Stats.Dump(w)
+	var err error
+
+	switch r.FormValue("format") {
+	case "tsv", "txt", "text":
+		w.Header().Set("Content-Type", "text/plain")
+		err = s.Stats.DumpText(w)
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		err = s.Stats.Dump(w)
+	}
 	if err != nil {
 		log.WithFields(log.Fields{
 			"error": err.Error(),

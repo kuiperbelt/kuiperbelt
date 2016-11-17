@@ -1,9 +1,12 @@
 package kuiperbelt
 
 import (
+	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"sync/atomic"
+	"time"
 )
 
 type Stats struct {
@@ -20,6 +23,17 @@ func NewStats() *Stats {
 
 func (s *Stats) Dump(w io.Writer) error {
 	return json.NewEncoder(w).Encode(s)
+}
+
+func (s *Stats) DumpText(w io.Writer) error {
+	now := time.Now().Unix()
+	_w := bufio.NewWriter(w)
+	fmt.Fprintf(_w, "kuiperbelt.connections\t%d\t%d\n", s.Connections, now)
+	fmt.Fprintf(_w, "kuiperbelt.total_connections\t%d\t%d\n", s.TotalConnections, now)
+	fmt.Fprintf(_w, "kuiperbelt.total_messages\t%d\t%d\n", s.TotalMessages, now)
+	fmt.Fprintf(_w, "kuiperbelt.connect_errors\t%d\t%d\n", s.ConnectErrors, now)
+	fmt.Fprintf(_w, "kuiperbelt.message_errors\t%d\t%d\n", s.MessageErrors, now)
+	return _w.Flush()
 }
 
 func (s *Stats) ConnectEvent() {

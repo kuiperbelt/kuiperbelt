@@ -42,6 +42,13 @@ func TestStats(t *testing.T) {
 	if out.String() != `{"connections":5,"total_connections":10,"total_messages":4,"connect_errors":3,"message_errors":2}`+"\n" {
 		t.Errorf("unexpected dump JSON %s", out.String())
 	}
+
+	text := new(bytes.Buffer)
+	err = s.DumpText(text)
+	if err != nil {
+		t.Errorf("stats dump text failed %s", err)
+	}
+	t.Log(text.String())
 }
 
 func TestStatsRace(t *testing.T) {
