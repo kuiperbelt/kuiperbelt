@@ -232,7 +232,8 @@ func (s *WebSocketSession) WaitClose() {
 func (s *WebSocketSession) WatchClose() {
 	defer s.Close()
 	defer func() { go s.SendCloseCallback() }()
-	_, err := io.Copy(new(blackholeWriter), s)
+	buf := make([]byte, ioBufferSize)
+	_, err := io.CopyBuffer(new(blackholeWriter), s, buf)
 	if err == nil {
 		return
 	}

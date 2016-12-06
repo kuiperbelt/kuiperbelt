@@ -16,6 +16,10 @@ var (
 	cannotSendMessageError = errors.New("cannot send messages.")
 )
 
+const (
+	ioBufferSize = 4096
+)
+
 type cannotFindSessionKeysError []sessionError
 
 func (e cannotFindSessionKeysError) Error() string {
@@ -115,7 +119,8 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b := new(bytes.Buffer)
-	_, err = io.Copy(b, r.Body)
+	buf := make([]byte, ioBufferSize)
+	_, err = io.CopyBuffer(b, r.Body, buf)
 	if err != nil {
 	}
 	message := &Message{
@@ -145,7 +150,8 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	b := new(bytes.Buffer)
-	_, err = io.Copy(b, r.Body)
+	buf := make([]byte, ioBufferSize)
+	_, err = io.CopyBuffer(b, r.Body, buf)
 	if err != nil {
 	}
 	message := &Message{
