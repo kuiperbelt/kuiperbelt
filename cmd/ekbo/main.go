@@ -6,10 +6,14 @@ import (
 
 	log "gopkg.in/Sirupsen/logrus.v0"
 
+	"github.com/google/gops/agent"
 	"github.com/mackee/kuiperbelt"
 )
 
 func main() {
+	if err := agent.Start(); err != nil {
+		log.Fatal(err)
+	}
 	var configFilename, logLevel, port, sock string
 	var showVersion bool
 	flag.StringVar(&configFilename, "config", "config.yml", "config path")
