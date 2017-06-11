@@ -9,7 +9,7 @@ test:
 	go test
 
 get-deps:
-	go get .
+	dep ensure
 
 clean:
 	rm -f cmd/ekbo/ekbo
