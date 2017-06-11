@@ -19,7 +19,7 @@ install: cmd/ekbo/ekbo
 
 packages:
 	cd cmd/ekbo && gox -os="linux darwin" -arch="amd64 arm" -output "../../pkg/{{.Dir}}-${VERSION}-{{.OS}}-{{.Arch}}" -ldflags "-w -s -X github.com/mackee/kuiperbelt.Version=$(VERSION)"
-	cd pkg && find . -name "*${VERSION}*" -type f -exec zip {}.zip {} \;
+	cd pkg && find . -name "*${VERSION}*" -type f -exec zip -m -q {}.zip {} \;
 
 release:
 	ghr ${VERSION} pkg
