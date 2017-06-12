@@ -185,9 +185,12 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 }
 
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
-	closeCh := make(chan struct{})
-	onceClose := sync.Once{}
-	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose, new(atomic.Value)}
+	session := &WebSocketSession{
+		Conn:    ws,
+		key:     key,
+		closeCh: make(chan struct{}),
+		Config:  s.Config,
+	}
 
 	return session, nil
 }
@@ -198,7 +201,7 @@ type WebSocketSession struct {
 	closeCh         chan struct{}
 	Config          Config
 	onceClose       sync.Once
-	isNotifiedClose *atomic.Value
+	isNotifiedClose atomic.Value
 }
 
 func (s *WebSocketSession) Key() string {
