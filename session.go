@@ -8,7 +8,7 @@ import (
 
 var (
 	sessionMap         = map[string]Session{}
-	sessionMapLocker   = new(sync.Mutex)
+	sessionMapLocker   sync.RWMutex
 	errSessionNotFound = errors.New("kuiperbelt: session is not found")
 )
 
@@ -25,8 +25,8 @@ func AddSession(s Session) {
 }
 
 func GetSession(key string) (Session, error) {
-	sessionMapLocker.Lock()
-	defer sessionMapLocker.Unlock()
+	sessionMapLocker.RLock()
+	defer sessionMapLocker.RUnlock()
 	s, ok := sessionMap[key]
 	if !ok {
 		return nil, errSessionNotFound
