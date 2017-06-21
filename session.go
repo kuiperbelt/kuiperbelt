@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	sessionMap           = map[string]Session{}
-	sessionMapLocker     = new(sync.Mutex)
-	sessionNotFoundError = errors.New("session is not found.")
+	sessionMap         = map[string]Session{}
+	sessionMapLocker   sync.RWMutex
+	errSessionNotFound = errors.New("kuiperbelt: session is not found")
 )
 
 type Session interface {
@@ -25,11 +25,11 @@ func AddSession(s Session) {
 }
 
 func GetSession(key string) (Session, error) {
-	sessionMapLocker.Lock()
-	defer sessionMapLocker.Unlock()
+	sessionMapLocker.RLock()
+	defer sessionMapLocker.RUnlock()
 	s, ok := sessionMap[key]
 	if !ok {
-		return nil, sessionNotFoundError
+		return nil, errSessionNotFound
 	}
 	return s, nil
 }
@@ -38,7 +38,7 @@ func DelSession(key string) error {
 	sessionMapLocker.Lock()
 	defer sessionMapLocker.Unlock()
 	if _, ok := sessionMap[key]; !ok {
-		return sessionNotFoundError
+		return errSessionNotFound
 	}
 	delete(sessionMap, key)
 	return nil

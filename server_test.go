@@ -205,7 +205,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		}
 	}
 
-	if err != sessionNotFoundError {
+	if err != errSessionNotFound {
 		t.Error("not removed session:", err)
 	}
 
