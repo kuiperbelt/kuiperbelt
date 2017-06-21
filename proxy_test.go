@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,7 +82,7 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 		t.Fatal("cannot connect error:", err)
 	}
 
-	io.CopyN(new(blackholeWriter), conn, int64(len([]byte("hello"))))
+	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
 
 	codec := &websocket.Codec{
 		Unmarshal: func(data []byte, payloadType byte, v interface{}) error {

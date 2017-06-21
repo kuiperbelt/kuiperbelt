@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"io/ioutil"
+
 	"golang.org/x/net/websocket"
 )
 
@@ -177,7 +179,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		t.Fatal("cannot connect error:", err)
 	}
 
-	io.CopyN(new(blackholeWriter), conn, int64(len([]byte("hello"))))
+	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
 
 	_, err = GetSession("hogehoge")
 	if err != nil {

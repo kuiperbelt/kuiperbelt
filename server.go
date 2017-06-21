@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -233,7 +234,7 @@ func (s *WebSocketSession) WatchClose() {
 	defer s.Close()
 	defer func() { go s.SendCloseCallback() }()
 	buf := make([]byte, ioBufferSize)
-	_, err := io.CopyBuffer(new(blackholeWriter), s, buf)
+	_, err := io.CopyBuffer(ioutil.Discard, s, buf)
 	if err == nil {
 		return
 	}
@@ -334,11 +335,4 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	}
 
 	return message.buf.Bytes(), payloadType, nil
-}
-
-type blackholeWriter struct {
-}
-
-func (bw *blackholeWriter) Write(p []byte) (int, error) {
-	return len(p), nil
 }
