@@ -64,6 +64,20 @@ func TestStatsRace(t *testing.T) {
 			st.DisconnectEvent()
 			wg.Done()
 		}(s)
+
+		wg.Add(1)
+		go func(st *Stats) {
+			var text bytes.Buffer
+			s.DumpText(&text)
+			wg.Done()
+		}(s)
+
+		wg.Add(1)
+		go func(st *Stats) {
+			var text bytes.Buffer
+			s.Dump(&text)
+			wg.Done()
+		}(s)
 	}
 	wg.Wait()
 	if s.Connections() != 0 || s.TotalConnections() != 1000 || s.TotalMessages() != 10000 {
