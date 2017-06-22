@@ -6,7 +6,7 @@ cmd/ekbo/ekbo: *.go cmd/ekbo/main.go
 .PHONY: clean install get-deps test packages
 
 test:
-	go test
+	go test -v -race ./...
 
 get-deps:
 	go get -u github.com/golang/dep/cmd/dep
