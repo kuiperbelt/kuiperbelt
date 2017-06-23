@@ -14,14 +14,15 @@ import (
 )
 
 func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
+	var pool SessionPool
 	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
 	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
 
-	AddSession(s1)
-	AddSession(s2)
+	pool.Add(s1)
+	pool.Add(s2)
 
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -60,15 +61,16 @@ func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
 }
 
 func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
 
 	tc := TestConfig
 	tc.Callback.Connect = tcc.URL
 	st := NewStats()
-	p := NewProxy(tc, st)
+	p := NewProxy(tc, st, &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
-	server := NewWebSocketServer(tc, st)
+	server := NewWebSocketServer(tc, st, &pool)
 	th := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
@@ -112,14 +114,15 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 }
 
 func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
+	var pool SessionPool
 	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
 	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
 
-	AddSession(s1)
-	AddSession(s2)
+	pool.Add(s1)
+	pool.Add(s2)
 
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.CloseHandlerFunc))
 	defer ts.Close()
 
@@ -165,11 +168,12 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 }
 
 func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
+	var pool SessionPool
 	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
-	AddSession(s1)
+	pool.Add(s1)
 
 	tc := TestConfig // StrictBroadcast == false (default)
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -210,12 +214,13 @@ func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 }
 
 func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
+	var pool SessionPool
 	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
-	AddSession(s1)
+	pool.Add(s1)
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -256,14 +261,15 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue1(t *testing.T) {
 }
 
 func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
+	var pool SessionPool
 	s1 := &TestSession{new(bytes.Buffer), "hogehoge", false, false}
 	s2 := &TestSession{new(bytes.Buffer), "fugafuga", false, false}
-	AddSession(s1)
-	AddSession(s2)
+	pool.Add(s1)
+	pool.Add(s2)
 
 	tc := TestConfig
 	tc.StrictBroadcast = true
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
 	defer ts.Close()
 
@@ -308,8 +314,9 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 }
 
 func TestProxyPingHandlerFunc(t *testing.T) {
+	var pool SessionPool
 	tc := TestConfig
-	p := NewProxy(tc, NewStats())
+	p := NewProxy(tc, NewStats(), &pool)
 	ts := httptest.NewServer(http.HandlerFunc(p.PingHandlerFunc))
 	defer ts.Close()
 

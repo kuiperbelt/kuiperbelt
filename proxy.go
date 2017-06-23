@@ -34,12 +34,14 @@ func (e cannotFindSessionKeysError) Error() string {
 type Proxy struct {
 	Config Config
 	Stats  *Stats
+	Pool   *SessionPool
 }
 
-func NewProxy(c Config, s *Stats) *Proxy {
+func NewProxy(c Config, s *Stats, p *SessionPool) *Proxy {
 	return &Proxy{
 		Config: c,
 		Stats:  s,
+		Pool:   p,
 	}
 }
 
@@ -67,7 +69,7 @@ func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Sessio
 	ss := make([]Session, 0, len(keys))
 	se := make(cannotFindSessionKeysError, 0, len(keys))
 	for _, key := range keys {
-		s, err := GetSession(key)
+		s, err := p.Pool.Get(key)
 		if err != nil {
 			se = append(se, sessionError{err.Error(), key})
 			continue

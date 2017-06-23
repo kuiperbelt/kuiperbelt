@@ -45,12 +45,14 @@ func (e ConnectCallbackError) Error() string {
 type WebSocketServer struct {
 	Config Config
 	Stats  *Stats
+	Pool   *SessionPool
 }
 
-func NewWebSocketServer(c Config, s *Stats) *WebSocketServer {
+func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 	return &WebSocketServer{
 		Config: c,
 		Stats:  s,
+		Pool:   p,
 	}
 }
 
@@ -170,13 +172,13 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			s.Stats.ConnectErrorEvent()
 			return
 		}
-		AddSession(session)
+		s.Pool.Add(session)
 		if message.buf.Len() > 0 {
 			s.Stats.MessageEvent()
 			session.SendMessage(message)
 		}
 
-		defer DelSession(session.Key())
+		defer s.Pool.Delete(session.Key())
 		log.WithFields(log.Fields{
 			"session": session.Key(),
 		}).Info("connected session")
@@ -191,6 +193,7 @@ func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*
 		key:     key,
 		closeCh: make(chan struct{}),
 		Config:  s.Config,
+		server:  s,
 	}
 
 	return session, nil
@@ -203,6 +206,7 @@ type WebSocketSession struct {
 	Config          Config
 	onceClose       sync.Once
 	isNotifiedClose atomic.Value
+	server          *WebSocketServer
 }
 
 func (s *WebSocketSession) Key() string {
@@ -216,10 +220,7 @@ func (s *WebSocketSession) NotifiedClose(isNotified bool) {
 func (s *WebSocketSession) Close() error {
 	var err error
 	s.onceClose.Do(func() {
-		err = DelSession(s.Key())
-		if err != nil {
-			return
-		}
+		s.server.Pool.Delete(s.Key())
 		err = s.Conn.Close()
 		if err != nil {
 			return

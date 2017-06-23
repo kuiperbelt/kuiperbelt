@@ -30,11 +30,12 @@ func Run(port, sock, configFilename string) {
 	}
 
 	st := NewStats()
+	var pool SessionPool
 
-	p := NewProxy(*c, st)
+	p := NewProxy(*c, st, &pool)
 	p.Register()
 
-	s := NewWebSocketServer(*c, st)
+	s := NewWebSocketServer(*c, st, &pool)
 	s.Register()
 
 	var ln net.Listener

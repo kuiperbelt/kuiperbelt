@@ -78,13 +78,14 @@ func newTestWebSocketRequest(url string) (*http.Request, error) {
 }
 
 func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
 
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -122,13 +123,14 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 }
 
 func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.FailHandler))
 
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -156,6 +158,7 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 }
 
 func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc1 := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
 	tcc2 := httptest.NewServer(http.HandlerFunc(callbackServer.CloseHandler))
@@ -164,7 +167,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	c.Callback.Connect = tcc1.URL
 	c.Callback.Close = tcc2.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -181,7 +184,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 
 	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
 
-	_, err = GetSession("hogehoge")
+	_, err = pool.Get("hogehoge")
 	if err != nil {
 		t.Fatal("cannot get session error:", err)
 	}
@@ -199,7 +202,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		time.Sleep(10 * time.Millisecond)
 
-		_, err = GetSession("hogehoge")
+		_, err = pool.Get("hogehoge")
 		if err != nil {
 			break
 		}
