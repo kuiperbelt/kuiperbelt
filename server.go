@@ -106,7 +106,7 @@ func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Error("stats dump failed")
-		http.Error(w, `{"result":"ERROR"}`, http.StatusInternalServerError)
+		panic(http.ErrAbortHandler)
 	}
 }
 

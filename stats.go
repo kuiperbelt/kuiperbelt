@@ -1,7 +1,7 @@
 package kuiperbelt
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -68,13 +68,15 @@ func (s *Stats) Dump(w io.Writer) error {
 
 func (s *Stats) DumpText(w io.Writer) error {
 	now := time.Now().Unix()
-	_w := bufio.NewWriter(w)
-	fmt.Fprintf(_w, "kuiperbelt.connections       %19d %19d\n", s.Connections(), now)
-	fmt.Fprintf(_w, "kuiperbelt.total_connections %19d %19d\n", s.TotalConnections(), now)
-	fmt.Fprintf(_w, "kuiperbelt.total_messages    %19d %19d\n", s.TotalMessages(), now)
-	fmt.Fprintf(_w, "kuiperbelt.connect_errors    %19d %19d\n", s.ConnectErrors(), now)
-	fmt.Fprintf(_w, "kuiperbelt.message_errors    %19d %19d\n", s.MessageErrors(), now)
-	return _w.Flush()
+	var b [512]byte
+	buf := bytes.NewBuffer(b[:])
+	fmt.Fprintf(buf, "kuiperbelt.connections\t%d\t%d\n", s.Connections(), now)
+	fmt.Fprintf(buf, "kuiperbelt.total_connections\t%d\t%d\n", s.TotalConnections(), now)
+	fmt.Fprintf(buf, "kuiperbelt.total_messages\t%d\t%d\n", s.TotalMessages(), now)
+	fmt.Fprintf(buf, "kuiperbelt.connect_errors\t%d\t%d\n", s.ConnectErrors(), now)
+	fmt.Fprintf(buf, "kuiperbelt.message_errors\t%d\t%d\n", s.MessageErrors(), now)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 func (s *Stats) ConnectEvent() {
