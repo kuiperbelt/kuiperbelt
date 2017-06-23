@@ -9,9 +9,13 @@ import (
 	"time"
 )
 
-type doNotCopy struct{}
+// macopy may be embedded into structs which must not be copied
+// after the first use.
+// See https://github.com/golang/go/issues/8005#issuecomment-190753527
+// for details.
+type macopy struct{}
 
-func (*doNotCopy) Lock() {}
+func (*macopy) Lock() {}
 
 type Stats struct {
 	connections      int64
@@ -19,7 +23,7 @@ type Stats struct {
 	totalMessages    int64
 	connectErrors    int64
 	messageErrors    int64
-	doNotCopy        doNotCopy
+	noCopy           macopy
 }
 
 func NewStats() *Stats {
