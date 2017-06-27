@@ -56,14 +56,12 @@ func (p *Proxy) Register() {
 
 func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Session, error) {
 	if r.Method != "POST" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		io.WriteString(w, "Required POST method.")
+		http.Error(w, "Required POST method.", http.StatusMethodNotAllowed)
 		return nil, preHookError
 	}
 	keys, ok := r.Header[p.Config.SessionHeader]
 	if !ok || len(keys) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		io.WriteString(w, "Session is not found.")
+		http.Error(w, "Session is not found.", http.StatusBadRequest)
 		return nil, preHookError
 	}
 	ss := make([]Session, 0, len(keys))
@@ -126,8 +124,8 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 	}
 	message := &Message{
-		buf:         b,
-		contentType: r.Header.Get("Content-Type"),
+		Body:        b.Bytes(),
+		ContentType: r.Header.Get("Content-Type"),
 	}
 
 	for _, s := range ss {

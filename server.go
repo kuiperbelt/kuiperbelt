@@ -5,15 +5,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
-	"sync/atomic"
 
 	"golang.org/x/net/websocket"
+
+	"io"
+	"io/ioutil"
 
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
@@ -56,6 +55,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 	}
 }
 
+// Handler handles websocket connection requests.
 func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -69,8 +69,7 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		if ce, ok := err.(ConnectCallbackError); ok {
 			status = ce.Status
 		}
-		w.WriteHeader(status)
-		io.WriteString(w, err.Error())
+		http.Error(w, http.StatusText(status), status)
 
 		log.WithFields(log.Fields{
 			"status": status,
@@ -79,7 +78,12 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	server := websocket.Server{Handler: websocket.Handler(s.NewWebSocketHandler(resp))}
+	hander, err := s.NewWebSocketHandler(resp)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	server := websocket.Server{Handler: websocket.Handler(handler)}
 	server.ServeHTTP(w, r)
 }
 
@@ -111,12 +115,12 @@ func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
-	callbackUrl, err := url.ParseRequestURI(s.Config.Callback.Connect)
+	callback, err := url.ParseRequestURI(s.Config.Callback.Connect)
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
 	callbackUrl.RawQuery = r.URL.RawQuery
-	callbackRequest, err := http.NewRequest(r.Method, callbackUrl.String(), r.Body)
+	callbackRequest, err := http.NewRequest(r.Method, callback.String(), r.Body)
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
@@ -154,16 +158,20 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	return resp, nil
 }
 
-func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *websocket.Conn) {
+func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *websocket.Conn), error) {
 	defer resp.Body.Close()
 	key := resp.Header.Get(s.Config.SessionHeader)
-	b := new(bytes.Buffer)
-	io.Copy(b, resp.Body)
+	var b bytes.Buffer
+	if _, err := b.ReadFrom(resp.Body); err != nil {
+		return err
+	}
 	message := &Message{
-		buf:         b,
-		contentType: resp.Header.Get("Content-Type"),
+		Body:        b.Bytes(),
+		ContentType: resp.Header.Get("Content-Type"),
+		Session:     key,
 	}
 	return func(ws *websocket.Conn) {
+		// register a new websocket sesssion.
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -173,150 +181,99 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			return
 		}
 		s.Pool.Add(session)
-		if message.buf.Len() > 0 {
-			s.Stats.MessageEvent()
-			session.SendMessage(message)
-		}
-
 		defer s.Pool.Delete(session.Key())
-		log.WithFields(log.Fields{
-			"session": session.Key(),
-		}).Info("connected session")
-		go session.WatchClose()
-		session.WaitClose()
-	}
+
+		// send the first message.
+		if len(message.Body) > 0 {
+			s.Stats.MessageEvent()
+			if err := sendWsCodec.Send(ws, message); err != nil {
+				s.Stats.MessageErrorEvent()
+				return
+			}
+		}
+		go session.sendMessages()
+		go session.recvMessages()
+		session.waitForClose()
+	}, nil
 }
 
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
+	send := make(chan Message, 4)
+	recv := make(chan Message, 4)
 	session := &WebSocketSession{
-		Conn:    ws,
-		key:     key,
-		closeCh: make(chan struct{}),
-		Config:  s.Config,
-		server:  s,
+		ws:     ws,
+		key:    key,
+		server: s,
+		send:   send,
+		recv:   recv,
+		closed: make(chan struct{}),
 	}
 
 	return session, nil
 }
 
 type WebSocketSession struct {
-	*websocket.Conn
-	key             string
-	closeCh         chan struct{}
-	Config          Config
-	onceClose       sync.Once
-	isNotifiedClose atomic.Value
-	server          *WebSocketServer
+	ws     *websocket.Conn
+	key    string
+	server *WebSocketServer
+	send   chan Message
+	recv   chan Message
+	closed chan struct{}
 }
 
+// Key returns the session key.
 func (s *WebSocketSession) Key() string {
 	return s.key
 }
 
-func (s *WebSocketSession) NotifiedClose(isNotified bool) {
-	s.isNotifiedClose.Store(isNotified)
+// Send returns the channel for sending messages.
+func (s *WebSocketSession) Send() chan<- Message {
+	return s.send
 }
 
+// Recv returns the channel for recieving messages.
+func (s *WebSocketSession) Recv() <-chan Message {
+	return s.recv
+}
+
+// Close closes the session.
 func (s *WebSocketSession) Close() error {
-	var err error
-	s.onceClose.Do(func() {
-		s.server.Pool.Delete(s.Key())
-		err = s.Conn.Close()
-		if err != nil {
+	close(s.closed)
+	return s.ws.Close()
+}
+
+func (s *WebSocketSession) sendMessages() {
+	for {
+		select {
+		case msg <- s.send:
+			if err := sendWsCodec.Send(s.ws, msg); err != nil {
+				s.Close()
+				return
+			}
+		case <-s.closed:
 			return
 		}
-		s.closeCh <- struct{}{}
-	})
-	return nil
+	}
 }
 
-func (s *WebSocketSession) WaitClose() {
-	<-s.closeCh
-}
-
-func (s *WebSocketSession) WatchClose() {
-	defer s.Close()
-	defer func() { go s.SendCloseCallback() }()
+func (s *WebSocketSession) recvMessages() {
 	buf := make([]byte, ioBufferSize)
-	_, err := io.CopyBuffer(ioutil.Discard, s, buf)
-	if err == nil {
-		return
-	}
-	// ignore closed session error
-	if strings.HasSuffix(err.Error(), "use of closed network connection") {
-		return
-	}
-
-	log.WithFields(log.Fields{
-		"error": err.Error(),
-	}).Error("watch close frame error")
+	io.CopyBuffer(ioutil.Discard, s.ws, buf)
 }
 
-func (s *WebSocketSession) SendCloseCallback() {
-	// cancel sending when not set callback url
-	if s.Config.Callback.Close == "" {
-		return
-	}
-
-	// cancel sending when notified closed already
-	if isNotified, ok := s.isNotifiedClose.Load().(bool); ok && isNotified {
-		return
-	}
-
-	callbackRequest, err := http.NewRequest("POST", s.Config.Callback.Close, nil)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("cannot create close callback request.")
-		return
-	}
-
-	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
-	resp, err := callbackClient.Do(callbackRequest)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("failed send close callback request.")
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b := new(bytes.Buffer)
-		b.ReadFrom(resp.Body)
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"status":  resp.Status,
-			"error":   b.String(),
-		}).Error("invalid close callback status.")
-		return
-	}
-
-	log.WithFields(log.Fields{
-		"session": s.Key(),
-	}).Info("success close callback.")
-}
-
-func (s *WebSocketSession) SendMessage(message *Message) error {
-	message.session = s.key
-	return sendWsCodec.Send(s.Conn, message)
-}
-
-type Message struct {
-	buf         *bytes.Buffer
-	contentType string
-	session     string
+func (s *WebSocketSession) waitForClose() {
+	<-s.closed
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
 	message, ok := v.(*Message)
 	if !ok {
-		return nil, 0x0, errors.New("value is not *kuiperbelt.Message.")
+		return nil, 0x0, errors.New("kuiperbelt: value is not *kuiperbelt.Message")
 	}
 
+	// parce Content-Type
 	payloadType := byte(websocket.TextFrame)
-	contentType := message.contentType
+	contentType := message.ContentType
 	if i := strings.Index(contentType, ";"); i >= 0 {
 		contentType = contentType[0:i]
 	}
@@ -328,15 +285,15 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	switch payloadType {
 	case websocket.TextFrame:
 		log.WithFields(log.Fields{
-			"session": message.session,
-			"message": message.buf.String(),
+			"session": message.Session,
+			"message": string(message.Body),
 		}).Debug("write messege to session")
 	case websocket.BinaryFrame:
 		log.WithFields(log.Fields{
 			"session": message.session,
-			"message": hex.EncodeToString(message.buf.Bytes()),
+			"message": hex.EncodeToString(message.Body),
 		}).Debug("write messege to session")
 	}
 
-	return message.buf.Bytes(), payloadType, nil
+	return message.Body, payloadType, nil
 }

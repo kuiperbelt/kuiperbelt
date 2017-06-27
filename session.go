@@ -4,7 +4,6 @@ package kuiperbelt
 
 import (
 	"errors"
-	"io"
 	"sync"
 )
 
@@ -16,10 +15,19 @@ type SessionPool struct {
 	m  map[string]Session
 }
 
+// Message is a message container for communicating through sessions.
+type Message struct {
+	Body        []byte
+	ContentType string
+	Session     string
+}
+
+// Session is an interface for sessions.
 type Session interface {
-	io.ReadWriteCloser
+	Send() chan<- Message
+	Recv() <-chan Message
 	Key() string
-	NotifiedClose(bool)
+	Close() error
 }
 
 // Add add new session into the SessionPool.
