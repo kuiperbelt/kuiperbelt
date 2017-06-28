@@ -123,7 +123,7 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	_, err = io.CopyBuffer(b, r.Body, buf)
 	if err != nil {
 	}
-	message := &Message{
+	message := Message{
 		Body:        b.Bytes(),
 		ContentType: r.Header.Get("Content-Type"),
 	}
@@ -154,9 +154,9 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	_, err = io.CopyBuffer(b, r.Body, buf)
 	if err != nil {
 	}
-	message := &Message{
-		buf:         b,
-		contentType: r.Header.Get("Content-Type"),
+	message := Message{
+		Body:        b.Bytes(),
+		ContentType: r.Header.Get("Content-Type"),
 	}
 
 	for _, s := range ss {
@@ -174,49 +174,17 @@ type sessionError struct {
 	Session string `json:"session"`
 }
 
-func (p *Proxy) sendMessage(s Session, message *Message) error {
+func (p *Proxy) sendMessage(s Session, message Message) error {
 	p.Stats.MessageEvent()
-	var err error
-	if wss, ok := s.(*WebSocketSession); ok {
-		err = wss.SendMessage(message)
-	} else {
-		var nw int
-		nw, err = s.Write(message.buf.Bytes())
-		if nw != message.buf.Len() {
-			p.Stats.MessageErrorEvent()
-			log.WithFields(log.Fields{
-				"session":      s.Key(),
-				"write_bytes":  message.buf.Len(),
-				"return_bytes": nw,
-			}).Error("write to session is short")
-			return cannotSendMessageError
-		}
-	}
-	if err != nil {
-		p.Stats.MessageErrorEvent()
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("write to session error")
-		err = s.Close()
-		if err != nil {
-			log.WithFields(log.Fields{
-				"session": s.Key(),
-				"error":   err.Error(),
-			}).Error("close session error")
-		}
-		return cannotSendMessageError
-	}
-
+	s.Send() <- message
 	return nil
 }
 
-func (p *Proxy) closeSession(s Session, message *Message) {
+func (p *Proxy) closeSession(s Session, message Message) {
 	err := p.sendMessage(s, message)
 	if err != nil {
 		return
 	}
-	s.NotifiedClose(true)
 	err = s.Close()
 	if err != nil {
 		log.WithFields(log.Fields{

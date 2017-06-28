@@ -6,20 +6,18 @@ import (
 
 type TestSession struct {
 	*bytes.Buffer
-	key             string
-	isClosed        bool
-	isNotifiedClose bool
+	send chan Message
+	key  string
 }
 
 func (s *TestSession) Key() string {
 	return s.key
 }
 
-func (s *TestSession) Close() error {
-	s.isClosed = true
-	return nil
+func (s *TestSession) Send() chan<- Message {
+	return s.send
 }
 
-func (s *TestSession) NotifiedClose(isNotified bool) {
-	s.isNotifiedClose = isNotified
+func (s *TestSession) Close() error {
+	return nil
 }

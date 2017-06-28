@@ -24,7 +24,6 @@ type Message struct {
 // Session is an interface for sessions.
 type Session interface {
 	Send() chan<- Message
-	Recv() <-chan Message
 	Key() string
 	Close() error
 }

@@ -78,7 +78,7 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hander, err := s.NewWebSocketHandler(resp)
+	handler, err := s.NewWebSocketHandler(resp)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -119,7 +119,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
 	}
-	callbackUrl.RawQuery = r.URL.RawQuery
+	callback.RawQuery = r.URL.RawQuery
 	callbackRequest, err := http.NewRequest(r.Method, callback.String(), r.Body)
 	if err != nil {
 		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
@@ -163,7 +163,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 	key := resp.Header.Get(s.Config.SessionHeader)
 	var b bytes.Buffer
 	if _, err := b.ReadFrom(resp.Body); err != nil {
-		return err
+		return nil, err
 	}
 	message := &Message{
 		Body:        b.Bytes(),
@@ -199,13 +199,11 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
 	send := make(chan Message, 4)
-	recv := make(chan Message, 4)
 	session := &WebSocketSession{
 		ws:     ws,
 		key:    key,
 		server: s,
 		send:   send,
-		recv:   recv,
 		closed: make(chan struct{}),
 	}
 
@@ -217,7 +215,6 @@ type WebSocketSession struct {
 	key    string
 	server *WebSocketServer
 	send   chan Message
-	recv   chan Message
 	closed chan struct{}
 }
 
@@ -231,11 +228,6 @@ func (s *WebSocketSession) Send() chan<- Message {
 	return s.send
 }
 
-// Recv returns the channel for recieving messages.
-func (s *WebSocketSession) Recv() <-chan Message {
-	return s.recv
-}
-
 // Close closes the session.
 func (s *WebSocketSession) Close() error {
 	close(s.closed)
@@ -245,7 +237,7 @@ func (s *WebSocketSession) Close() error {
 func (s *WebSocketSession) sendMessages() {
 	for {
 		select {
-		case msg <- s.send:
+		case msg := <-s.send:
 			if err := sendWsCodec.Send(s.ws, msg); err != nil {
 				s.Close()
 				return
@@ -290,7 +282,7 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 		}).Debug("write messege to session")
 	case websocket.BinaryFrame:
 		log.WithFields(log.Fields{
-			"session": message.session,
+			"session": message.Session,
 			"message": hex.EncodeToString(message.Body),
 		}).Debug("write messege to session")
 	}
