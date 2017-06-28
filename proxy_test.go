@@ -384,3 +384,47 @@ func TestProxyPingHandlerFunc(t *testing.T) {
 		t.Fatalf("proxy handler response unexpected response: %+v", result)
 	}
 }
+
+func TestProxySendHandlerFunc__Timeout(t *testing.T) {
+	var pool SessionPool
+	s1 := &TestSession{
+		key:  "hogehoge",
+		send: make(chan Message),
+	}
+
+	pool.Add(s1)
+
+	tc := TestConfig
+	p := NewProxy(tc, NewStats(), &pool)
+	ts := httptest.NewServer(http.HandlerFunc(p.SendHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehoge")
+
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string        `json:"result"`
+		Errors []interface{} `json:"errors"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "OK" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+}

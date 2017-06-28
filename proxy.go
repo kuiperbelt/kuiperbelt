@@ -1,6 +1,7 @@
 package kuiperbelt
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,6 +129,15 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		ContentType: r.Header.Get("Content-Type"),
 	}
 
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if p.Config.SendTimeout != 0 {
+		ctx, cancel = context.WithTimeout(r.Context(), p.Config.SendTimeout)
+	} else {
+		ctx, cancel = context.WithCancel(r.Context())
+	}
+	defer cancel()
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(len(ss))
@@ -135,7 +145,7 @@ func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		s := s
 		go func() {
 			defer wg.Done()
-			if err := p.sendMessage(s, message); err != nil {
+			if err := p.sendMessage(ctx, s, message); err != nil {
 				mu.Lock()
 				se = append(se, sessionError{
 					Error:   err.Error(),
@@ -185,6 +195,15 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		LastWord:    true,
 	}
 
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if p.Config.SendTimeout != 0 {
+		ctx, cancel = context.WithTimeout(r.Context(), p.Config.SendTimeout)
+	} else {
+		ctx, cancel = context.WithCancel(r.Context())
+	}
+	defer cancel()
+
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(len(ss))
@@ -192,7 +211,7 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		s := s
 		go func() {
 			defer wg.Done()
-			if err := p.sendMessage(s, message); err != nil {
+			if err := p.sendMessage(ctx, s, message); err != nil {
 				mu.Lock()
 				se = append(se, sessionError{
 					Error:   err.Error(),
@@ -225,8 +244,16 @@ type sessionError struct {
 	Session string `json:"session"`
 }
 
-func (p *Proxy) sendMessage(s Session, message Message) error {
+func (p *Proxy) sendMessage(ctx context.Context, s Session, message Message) error {
 	p.Stats.MessageEvent()
-	s.Send() <- message
+	q := s.Send()
+	if q == nil {
+		return errors.New("kuiperbelt: session is closed")
+	}
+	select {
+	case q <- message:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	return nil
 }

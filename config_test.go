@@ -3,6 +3,7 @@ package kuiperbelt
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 var configData = []byte(`
@@ -10,6 +11,8 @@ session_header: "X-Kuiperbelt-Session-Key"
 port: 12345
 callback:
   connect: "http://localhost:12346/connect"
+send_timeout: 1s
+send_queue_size: 1
 `)
 var TestConfig = Config{
 	Port:          ":12345",
@@ -18,6 +21,8 @@ var TestConfig = Config{
 		Connect: "http://localhost:12346/connect",
 		Close:   "",
 	},
+	SendTimeout:   time.Second,
+	SendQueueSize: 1,
 }
 
 func TestConfig__Unmarshal(t *testing.T) {

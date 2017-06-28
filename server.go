@@ -181,7 +181,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 }
 
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
-	send := make(chan Message, 4)
+	send := make(chan Message, s.Config.SendQueueSize)
 	session := &WebSocketSession{
 		ws:       ws,
 		key:      key,
