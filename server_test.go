@@ -3,13 +3,13 @@ package kuiperbelt
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"io/ioutil"
 
 	"golang.org/x/net/websocket"
 )
@@ -21,14 +21,36 @@ const (
 )
 
 type testSuccessConnectCallbackServer struct {
-	IsCallbacked bool
-	IsClosed     bool
-	Header       http.Header
+	mu           sync.Mutex
+	isCallbacked bool
+	isClosed     bool
+	header       http.Header
+}
+
+func (s *testSuccessConnectCallbackServer) IsCallbacked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isCallbacked
+}
+
+func (s *testSuccessConnectCallbackServer) IsClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isCallbacked
+}
+
+func (s *testSuccessConnectCallbackServer) Header() http.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header
 }
 
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsCallbacked = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.mu.Unlock()
+
 	if r.Header.Get("Connection") == "upgrade" {
 		http.Error(w, "Connection header is upgrade", http.StatusBadRequest)
 		return
@@ -49,15 +71,19 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 }
 
 func (s *testSuccessConnectCallbackServer) FailHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsCallbacked = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.mu.Unlock()
 	w.WriteHeader(http.StatusForbidden)
 	io.WriteString(w, "fail authorization!")
 }
 
 func (s *testSuccessConnectCallbackServer) CloseHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsClosed = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isClosed = true
+	s.header = r.Header
+	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, "")
 }
@@ -105,19 +131,19 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 		t.Error("unexpected status code:", resp.StatusCode)
 	}
 
-	if !callbackServer.IsCallbacked {
+	if !callbackServer.IsCallbacked() {
 		t.Error("callback server doesn't receive request")
 	}
-	if callbackServer.Header.Get(testRequestSessionHeader) != "hogehoge" {
+	if callbackServer.Header().Get(testRequestSessionHeader) != "hogehoge" {
 		t.Error(
 			"callback server doesn't receive session key:",
-			callbackServer.Header.Get(testRequestSessionHeader),
+			callbackServer.Header().Get(testRequestSessionHeader),
 		)
 	}
-	if callbackServer.Header.Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
+	if callbackServer.Header().Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
 		t.Error(
 			"callback server doesn't receive endpoint name:",
-			callbackServer.Header.Get(testRequestSessionHeader),
+			callbackServer.Header().Get(testRequestSessionHeader),
 		)
 	}
 }
@@ -212,7 +238,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		t.Error("not removed session:", err)
 	}
 
-	if !callbackServer.IsClosed {
+	if !callbackServer.IsClosed() {
 		t.Error("not receive close callback")
 	}
 

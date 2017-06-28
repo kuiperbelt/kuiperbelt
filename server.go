@@ -176,8 +176,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 			}
 		}
 		go session.sendMessages()
-		go session.recvMessages()
-		session.waitForClose()
+		session.recvMessages()
 	}, nil
 }
 
@@ -223,7 +222,50 @@ func (s *WebSocketSession) Close() error {
 	}
 	s.server.Pool.Delete(s.key)
 	close(s.closedch)
+	if s.server.Config.Callback.Close != "" {
+		go s.sendCloseCallback()
+	}
 	return s.ws.Close()
+}
+
+func (s *WebSocketSession) sendCloseCallback() {
+	req, err := http.NewRequest("POST", s.server.Config.Callback.Close, nil)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("cannot create close callback request.")
+		return
+	}
+	req.Header.Add(s.server.Config.SessionHeader, s.Key())
+	resp, err := callbackClient.Do(req)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"error":   err.Error(),
+		}).Error("failed send close callback request.")
+	}
+	defer resp.Body.Close()
+
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"status":  resp.Status,
+			"error":   err.Error(),
+		}).Error("invalid close callback status.")
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"status":  resp.Status,
+			"error":   string(buf),
+		}).Error("invalid close callback status.")
+	}
+	log.WithFields(log.Fields{
+		"session": s.Key(),
+	}).Info("success close callback.")
 }
 
 func (s *WebSocketSession) sendMessages() {
@@ -231,6 +273,7 @@ func (s *WebSocketSession) sendMessages() {
 		select {
 		case msg := <-s.send:
 			if err := sendWsCodec.Send(s.ws, msg); err != nil {
+				s.server.Stats.MessageErrorEvent()
 				s.Close()
 				return
 			}
@@ -245,12 +288,20 @@ func (s *WebSocketSession) sendMessages() {
 }
 
 func (s *WebSocketSession) recvMessages() {
+	defer s.Close()
 	buf := make([]byte, ioBufferSize)
-	io.CopyBuffer(ioutil.Discard, s.ws, buf)
-}
+	_, err := io.CopyBuffer(ioutil.Discard, s.ws, buf)
+	if err == nil {
+		return
+	}
+	// ignore closed session error
+	if atomic.LoadUint32(&s.closed) != 0 {
+		return
+	}
 
-func (s *WebSocketSession) waitForClose() {
-	<-s.closedch
+	log.WithFields(log.Fields{
+		"error": err.Error(),
+	}).Error("watch close frame error")
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
