@@ -1,11 +1,13 @@
 package kuiperbelt
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
@@ -64,24 +66,39 @@ func Run(port, sock, configFilename string) {
 
 	}
 
-	startSignalHandler(ln)
-
-	err = http.Serve(ln, nil)
-	if err != nil {
-		log.Fatal("http serve error:", err)
-	}
-}
-
-func startSignalHandler(ln net.Listener) {
-	signalCh := make(chan os.Signal)
-	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+	server := &http.Server{}
 	go func() {
-		for {
-			s := <-signalCh
-			if s == syscall.SIGTERM || s == syscall.SIGINT {
-				log.Infof("received SIGTERM. shutting down...")
-				ln.Close()
-			}
+		err := server.Serve(ln)
+		if err == http.ErrServerClosed {
+			return
+		}
+		if err != nil {
+			log.Fatal("http serve error:", err)
 		}
 	}()
+
+	waitForSignal()
+
+	// Shutdown gracefully
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	server.Shutdown(ctx)
+	s.Shutdown(ctx)
+}
+
+func waitForSignal() {
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signalCh)
+
+	for s := range signalCh {
+		switch s {
+		case syscall.SIGTERM:
+			log.Infof("received SIGTERM. shutting down...")
+			return
+		case syscall.SIGINT:
+			log.Infof("received SIGINT. shutting down...")
+			return
+		}
+	}
 }

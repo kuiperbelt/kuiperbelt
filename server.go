@@ -2,18 +2,19 @@ package kuiperbelt
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync/atomic"
 
+	"time"
+
 	"golang.org/x/net/websocket"
-
-	"io"
-	"io/ioutil"
-
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
@@ -53,10 +54,10 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
-		defer s.Stats.ConnectErrorEvent()
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Error("connect error before upgrade")
+		s.Stats.ConnectErrorEvent()
 		return
 	}
 
@@ -193,6 +194,34 @@ func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*
 	return session, nil
 }
 
+func (s *WebSocketServer) Shutdown(ctx context.Context) error {
+	msg := Message{LastWord: true}
+	sessions := s.Pool.List()
+	for _, s := range sessions {
+		q := s.Send()
+		if q == nil {
+			continue
+		}
+		go func() {
+			select {
+			case q <- msg:
+			case <-ctx.Done():
+			}
+		}()
+	}
+
+	for s.Stats.Connections() > 0 && s.Stats.ClosingConnections() > 0 {
+		select {
+		default:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
+}
+
 type WebSocketSession struct {
 	ws       *websocket.Conn
 	key      string
@@ -223,12 +252,14 @@ func (s *WebSocketSession) Close() error {
 	s.server.Pool.Delete(s.key)
 	close(s.closedch)
 	if s.server.Config.Callback.Close != "" {
+		s.server.Stats.ClosingEvent()
 		go s.sendCloseCallback()
 	}
 	return s.ws.Close()
 }
 
 func (s *WebSocketSession) sendCloseCallback() {
+	defer s.server.Stats.ClosedEvent()
 	req, err := http.NewRequest("POST", s.server.Config.Callback.Close, nil)
 	if err != nil {
 		log.WithFields(log.Fields{

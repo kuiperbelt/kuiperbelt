@@ -61,3 +61,14 @@ func (p *SessionPool) Delete(key string) error {
 	delete(p.m, key)
 	return nil
 }
+
+// List returns a slice of all sessions in the pool.
+func (p *SessionPool) List() []Session {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	sessions := make([]Session, 0, len(p.m))
+	for _, s := range p.m {
+		sessions = append(sessions, s)
+	}
+	return sessions
+}

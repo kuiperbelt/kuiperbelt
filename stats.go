@@ -18,12 +18,13 @@ type macopy struct{}
 func (*macopy) Lock() {}
 
 type Stats struct {
-	connections      int64
-	totalConnections int64
-	totalMessages    int64
-	connectErrors    int64
-	messageErrors    int64
-	noCopy           macopy
+	connections        int64
+	totalConnections   int64
+	totalMessages      int64
+	connectErrors      int64
+	messageErrors      int64
+	closingConnections int64
+	noCopy             macopy
 }
 
 func NewStats() *Stats {
@@ -50,19 +51,25 @@ func (s *Stats) MessageErrors() int64 {
 	return atomic.LoadInt64(&s.messageErrors)
 }
 
+func (s *Stats) ClosingConnections() int64 {
+	return atomic.LoadInt64(&s.closingConnections)
+}
+
 func (s *Stats) Dump(w io.Writer) error {
 	return json.NewEncoder(w).Encode(struct {
-		Connections      int64 `json:"connections"`
-		TotalConnections int64 `json:"total_connections"`
-		TotalMessages    int64 `json:"total_messages"`
-		ConnectErrors    int64 `json:"connect_errors"`
-		MessageErrors    int64 `json:"message_errors"`
+		Connections        int64 `json:"connections"`
+		TotalConnections   int64 `json:"total_connections"`
+		TotalMessages      int64 `json:"total_messages"`
+		ConnectErrors      int64 `json:"connect_errors"`
+		MessageErrors      int64 `json:"message_errors"`
+		ClosingConnections int64 `json:"closing_connections"`
 	}{
-		Connections:      s.Connections(),
-		TotalConnections: s.TotalConnections(),
-		TotalMessages:    s.TotalMessages(),
-		ConnectErrors:    s.ConnectErrors(),
-		MessageErrors:    s.MessageErrors(),
+		Connections:        s.Connections(),
+		TotalConnections:   s.TotalConnections(),
+		TotalMessages:      s.TotalMessages(),
+		ConnectErrors:      s.ConnectErrors(),
+		MessageErrors:      s.MessageErrors(),
+		ClosingConnections: s.ClosingConnections(),
 	})
 }
 
@@ -75,6 +82,7 @@ func (s *Stats) DumpText(w io.Writer) error {
 	fmt.Fprintf(buf, "kuiperbelt.total_messages\t%d\t%d\n", s.TotalMessages(), now)
 	fmt.Fprintf(buf, "kuiperbelt.connect_errors\t%d\t%d\n", s.ConnectErrors(), now)
 	fmt.Fprintf(buf, "kuiperbelt.message_errors\t%d\t%d\n", s.MessageErrors(), now)
+	fmt.Fprintf(buf, "kuiperbelt.closing_connections\t%d\t%d\n", s.ClosingConnections(), now)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -98,4 +106,12 @@ func (s *Stats) MessageEvent() {
 
 func (s *Stats) MessageErrorEvent() {
 	atomic.AddInt64(&s.messageErrors, 1)
+}
+
+func (s *Stats) ClosingEvent() {
+	atomic.AddInt64(&s.closingConnections, 1)
+}
+
+func (s *Stats) ClosedEvent() {
+	atomic.AddInt64(&s.closingConnections, 11)
 }

@@ -48,3 +48,13 @@ func (p *SessionPool) Delete(key string) error {
 	p.m.Delete(key)
 	return nil
 }
+
+// List returns a slice of all sessions in the pool.
+func (p *SessionPool) List() []Session {
+	sessions := make([]Session)
+	p.m.Range(func(key, value interface{}{
+		sessions = append(sessions, value.(Session))
+	})
+
+	return sessions
+}
