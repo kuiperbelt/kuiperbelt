@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
-
 	"time"
 
 	"golang.org/x/net/websocket"
