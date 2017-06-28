@@ -1,11 +1,6 @@
 package kuiperbelt
 
-import (
-	"bytes"
-)
-
 type TestSession struct {
-	*bytes.Buffer
 	send chan Message
 	key  string
 }

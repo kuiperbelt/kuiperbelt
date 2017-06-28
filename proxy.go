@@ -1,28 +1,22 @@
 package kuiperbelt
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
-
-	log "gopkg.in/Sirupsen/logrus.v0"
-)
-
-var (
-	preHookError           = errors.New("invalid request.")
-	cannotSendMessageError = errors.New("cannot send messages.")
+	"sync"
 )
 
 const (
 	ioBufferSize = 4096
 )
 
-type cannotFindSessionKeysError []sessionError
+type sessionErrors []sessionError
 
-func (e cannotFindSessionKeysError) Error() string {
+func (e sessionErrors) Error() string {
 	keys := make([]string, 0, len(e))
 	for _, s := range e {
 		keys = append(keys, s.Session)
@@ -56,16 +50,20 @@ func (p *Proxy) Register() {
 
 func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Session, error) {
 	if r.Method != "POST" {
-		http.Error(w, "Required POST method.", http.StatusMethodNotAllowed)
-		return nil, preHookError
+		w.Header().Add("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(w, `{"errors":[{"error":"required POST method"}],"result":"NG"}`)
+		return nil, errors.New("kuiperbelt: method not allowed")
 	}
 	keys, ok := r.Header[p.Config.SessionHeader]
 	if !ok || len(keys) == 0 {
-		http.Error(w, "Session is not found.", http.StatusBadRequest)
-		return nil, preHookError
+		w.Header().Add("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, `{"errors":[{"error":"session header is missing"}],"result":"NG"}`)
+		return nil, errors.New("kuiperbelt: session header is missing")
 	}
 	ss := make([]Session, 0, len(keys))
-	se := make(cannotFindSessionKeysError, 0, len(keys))
+	se := make(sessionErrors, 0, len(keys))
 	for _, key := range keys {
 		s, err := p.Pool.Get(key)
 		if err != nil {
@@ -81,7 +79,7 @@ func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Sessio
 	return ss, nil
 }
 
-func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSessionKeysError, ss []Session) {
+func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se sessionErrors, ss []Session) {
 	res := struct {
 		Errors []sessionError `json:"errors"`
 		Result string         `json:"result"`
@@ -97,75 +95,119 @@ func (p *Proxy) sessionKeysErrorHandler(w http.ResponseWriter, se cannotFindSess
 		res.Result = "OK"
 	}
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Add("Content-Type", "application/json; charset=utf-8")
 	enc := json.NewEncoder(w)
 	enc.Encode(res)
 }
 
+// SendHandlerFunc handles POST /send request.
 func (p *Proxy) SendHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	ss, err := p.handlerPreHook(w, r)
-	if se, ok := err.(cannotFindSessionKeysError); ok {
-		p.sessionKeysErrorHandler(w, se, ss)
-		if p.Config.StrictBroadcast {
-			return
-		}
-	} else if err != nil {
+	se, ok := err.(sessionErrors)
+	if err != nil || (ok && p.Config.StrictBroadcast) {
 		return
-	} else {
-		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"result":"OK"}`)
 	}
 
-	b := new(bytes.Buffer)
-	buf := make([]byte, ioBufferSize)
-	_, err = io.CopyBuffer(b, r.Body, buf)
+	// XXX: meybe need limit?
+	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		w.Header().Add("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"result":"NG"}`)
+		return
 	}
 	message := Message{
-		Body:        b.Bytes(),
+		Body:        buf,
 		ContentType: r.Header.Get("Content-Type"),
 	}
 
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(len(ss))
 	for _, s := range ss {
-		go p.sendMessage(s, message)
+		s := s
+		go func() {
+			defer wg.Done()
+			if err := p.sendMessage(s, message); err != nil {
+				mu.Lock()
+				se = append(se, sessionError{
+					Error:   err.Error(),
+					Session: s.Key(),
+				})
+				mu.Unlock()
+			}
+		}()
 	}
+	wg.Wait()
+
+	if len(se) > 0 {
+		p.sessionKeysErrorHandler(w, se, ss)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, `{"result":"OK"}`)
 }
 
+// CloseHandlerFunc handles POST /close request.
 func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	ss, err := p.handlerPreHook(w, r)
-	if se, ok := err.(cannotFindSessionKeysError); ok {
-		p.sessionKeysErrorHandler(w, se, ss)
-		if p.Config.StrictBroadcast {
-			return
-		}
-	} else if err != nil {
+	se, ok := err.(sessionErrors)
+	if err != nil || (ok && p.Config.StrictBroadcast) {
 		return
-	} else {
-		w.WriteHeader(http.StatusOK)
-		io.WriteString(w, `{"result":"OK"}`)
 	}
 
-	b := new(bytes.Buffer)
-	buf := make([]byte, ioBufferSize)
-	_, err = io.CopyBuffer(b, r.Body, buf)
+	// XXX: meybe need limit?
+	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		w.Header().Add("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"result":"NG"}`)
+		return
 	}
 	message := Message{
-		Body:        b.Bytes(),
+		Body:        buf,
 		ContentType: r.Header.Get("Content-Type"),
+		LastWord:    true,
 	}
 
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(len(ss))
 	for _, s := range ss {
-		go p.closeSession(s, message)
+		s := s
+		go func() {
+			defer wg.Done()
+			if err := p.sendMessage(s, message); err != nil {
+				mu.Lock()
+				se = append(se, sessionError{
+					Error:   err.Error(),
+					Session: s.Key(),
+				})
+				mu.Unlock()
+			}
+		}()
 	}
+	wg.Wait()
+
+	if len(se) > 0 {
+		p.sessionKeysErrorHandler(w, se, ss)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, `{"result":"OK"}`)
 }
 
+// PingHandlerFunc handles ping request.
 func (p *Proxy) PingHandlerFunc(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	io.WriteString(w, `{"result":"OK"}`)
 }
 
@@ -178,19 +220,4 @@ func (p *Proxy) sendMessage(s Session, message Message) error {
 	p.Stats.MessageEvent()
 	s.Send() <- message
 	return nil
-}
-
-func (p *Proxy) closeSession(s Session, message Message) {
-	err := p.sendMessage(s, message)
-	if err != nil {
-		return
-	}
-	err = s.Close()
-	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("cannnot close session error")
-		return
-	}
 }
