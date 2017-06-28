@@ -165,7 +165,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 	if _, err := b.ReadFrom(resp.Body); err != nil {
 		return nil, err
 	}
-	message := &Message{
+	message := Message{
 		Body:        b.Bytes(),
 		ContentType: resp.Header.Get("Content-Type"),
 		Session:     key,
@@ -258,9 +258,9 @@ func (s *WebSocketSession) waitForClose() {
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
-	message, ok := v.(*Message)
+	message, ok := v.(Message)
 	if !ok {
-		return nil, 0x0, errors.New("kuiperbelt: value is not *kuiperbelt.Message")
+		return nil, 0x0, errors.New("kuiperbelt: value is not kuiperbelt.Message")
 	}
 
 	// parce Content-Type

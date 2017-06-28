@@ -3,8 +3,6 @@ package kuiperbelt
 import (
 	"bytes"
 	"encoding/json"
-	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -90,7 +88,9 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 		t.Fatal("cannot connect error:", err)
 	}
 
-	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
+	// ignore hello message
+	var hello string
+	websocket.Message.Receive(conn, &hello)
 
 	codec := &websocket.Codec{
 		Unmarshal: func(data []byte, payloadType byte, v interface{}) error {

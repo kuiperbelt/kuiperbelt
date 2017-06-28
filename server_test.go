@@ -37,7 +37,7 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 		http.Error(w, "Upgrade header is sent", http.StatusBadRequest)
 		return
 	}
-	for n, _ := range r.Header {
+	for n := range r.Header {
 		if strings.HasPrefix(strings.ToLower(n), "sec-websocket") {
 			http.Error(w, n+" header is sent", http.StatusBadRequest)
 			return
