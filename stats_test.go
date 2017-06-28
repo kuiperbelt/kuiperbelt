@@ -39,7 +39,7 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Errorf("stats dump failed %s", err)
 	}
-	if out.String() != `{"connections":5,"total_connections":10,"total_messages":4,"connect_errors":3,"message_errors":2}`+"\n" {
+	if out.String() != `{"connections":5,"total_connections":10,"total_messages":4,"connect_errors":3,"message_errors":2,"closing_connections":0}`+"\n" {
 		t.Errorf("unexpected dump JSON %s", out.String())
 	}
 
