@@ -19,6 +19,7 @@ type Message struct {
 	Body        []byte
 	ContentType string
 	Session     string
+	LastWord    bool
 }
 
 // Session is an interface for sessions.
