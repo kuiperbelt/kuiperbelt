@@ -56,11 +56,19 @@ func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
 		t.Fatalf("proxy handler response unexpected response: %+v", result)
 	}
 
-	if msg := <-s1.send; string(msg.Body) != "test message" {
-		t.Fatalf("proxy handler s1 not receive message: %s", string(msg.Body))
+	msg1 := <-s1.send
+	if string(msg1.Body) != "test message" {
+		t.Errorf("proxy handler s1 not receive message: %s", string(msg1.Body))
 	}
-	if msg := <-s2.send; string(msg.Body) != "test message" {
-		t.Fatalf("proxy handler s1 not receive message: %s", string(msg.Body))
+	if msg1.LastWord {
+		t.Error("s1 receives last word")
+	}
+	msg2 := <-s2.send
+	if string(msg2.Body) != "test message" {
+		t.Errorf("proxy handler s2 not receive message: %s", string(msg2.Body))
+	}
+	if msg2.LastWord {
+		t.Error("s2 receives last word")
 	}
 }
 
@@ -164,21 +172,20 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 		t.Fatalf("proxy handler response unexpected response: %+v", result)
 	}
 
-	if msg := <-s1.send; string(msg.Body) != "test message" {
-		t.Fatalf("proxy handler s1 not receive message: %s", string(msg.Body))
+	msg1 := <-s1.send
+	if string(msg1.Body) != "test message" {
+		t.Errorf("proxy handler s1 not receive message: %s", string(msg1.Body))
 	}
-	if msg := <-s2.send; string(msg.Body) != "test message" {
-		t.Fatalf("proxy handler s1 not receive message: %s", string(msg.Body))
+	if !msg1.LastWord {
+		t.Error("s1 does not receive last word")
 	}
-
-	/* TODO: fix me!
-	if !s1.isClosed {
-		t.Fatalf("proxy handler s1 is not closed")
+	msg2 := <-s2.send
+	if string(msg2.Body) != "test message" {
+		t.Errorf("proxy handler s2 not receive message: %s", string(msg2.Body))
 	}
-	if !s2.isClosed {
-		t.Fatalf("proxy handler s1 is not closed")
+	if !msg2.LastWord {
+		t.Error("s2 does not receive last word")
 	}
-	*/
 }
 
 func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
