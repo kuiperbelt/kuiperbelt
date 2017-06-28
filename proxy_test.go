@@ -342,14 +342,16 @@ func TestProxySendHandlerFunc__StrictBroadcastTrue2(t *testing.T) {
 	if len(result.Errors) != 1 {
 		t.Fatalf("proxy handler response unexpected response: %+v", result)
 	}
-	/* TODO: fix me!
-	if s1.String() == "test message" {
-		t.Fatalf("proxy handler s1 must not receive message: %s", s1.String())
+	select {
+	case msg := <-s1.send:
+		t.Fatalf("proxy handler s1 must not receive message: %#v", msg)
+	default:
 	}
-	if s2.String() == "test message" {
-		t.Fatalf("proxy handler s2 must not receive message: %s", s1.String())
+	select {
+	case msg := <-s2.send:
+		t.Fatalf("proxy handler s2 must not receive message: %#v", msg)
+	default:
 	}
-	*/
 }
 
 func TestProxyPingHandlerFunc(t *testing.T) {
