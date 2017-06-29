@@ -27,6 +27,7 @@ type Session interface {
 	Send() chan<- Message
 	Key() string
 	Close() error
+	Closed() <-chan struct{}
 }
 
 // Add add new session into the SessionPool.

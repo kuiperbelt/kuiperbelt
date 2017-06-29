@@ -257,6 +257,10 @@ func (s *WebSocketSession) Close() error {
 	return s.ws.Close()
 }
 
+func (s *WebSocketSession) Closed() <-chan struct{} {
+	return s.closedch
+}
+
 func (s *WebSocketSession) sendCloseCallback() {
 	defer s.server.Stats.ClosedEvent()
 	req, err := http.NewRequest("POST", s.server.Config.Callback.Close, nil)

@@ -254,6 +254,8 @@ func (p *Proxy) sendMessage(ctx context.Context, s Session, message Message) err
 	case q <- message:
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-s.Closed():
+		return errors.New("kuiperbelt: session is closed")
 	}
 	return nil
 }
