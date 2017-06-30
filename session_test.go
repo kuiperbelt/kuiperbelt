@@ -16,3 +16,7 @@ func (s *TestSession) Send() chan<- Message {
 func (s *TestSession) Close() error {
 	return nil
 }
+
+func (s *TestSession) Closed() <-chan struct{} {
+	return nil
+}
