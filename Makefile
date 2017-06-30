@@ -7,6 +7,7 @@ cmd/ekbo/ekbo: *.go cmd/ekbo/main.go
 
 test:
 	go test -v -race
+	go vet
 
 get-deps:
 	go get -u github.com/golang/dep/cmd/dep
