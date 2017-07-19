@@ -4,7 +4,8 @@ import (
 	"flag"
 	"fmt"
 
-	log "gopkg.in/Sirupsen/logrus.v0"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/mackee/kuiperbelt"
 )
@@ -12,8 +13,9 @@ import (
 func main() {
 	var configFilename, logLevel, port, sock string
 	var showVersion bool
+	var err error
 	flag.StringVar(&configFilename, "config", "config.yml", "config path")
-	flag.StringVar(&logLevel, "log-level", "", "log level")
+	flag.StringVar(&logLevel, "log-level", "info", "log level")
 	flag.StringVar(&port, "port", "", "launch port")
 	flag.StringVar(&sock, "sock", "", "unix domain socket path")
 	flag.BoolVar(&showVersion, "version", false, "show version")
@@ -24,14 +26,28 @@ func main() {
 		return
 	}
 
-	if logLevel != "" {
-		lvl, err := log.ParseLevel(logLevel)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"log_evel": logLevel,
-			}).Fatal("cannot parse log level")
-		}
-		log.SetLevel(lvl)
+	conf := zap.NewDevelopmentConfig()
+	conf.DisableStacktrace = true
+	switch logLevel {
+	case "debug":
+		conf.DisableStacktrace = false
+		conf.Level = zap.NewAtomicLevelAt(zapcore.DebugLevel)
+	case "info":
+		conf.Level = zap.NewAtomicLevelAt(zapcore.InfoLevel)
+	case "warn":
+		conf.Level = zap.NewAtomicLevelAt(zapcore.WarnLevel)
+	case "error":
+		conf.Level = zap.NewAtomicLevelAt(zapcore.ErrorLevel)
 	}
+
+	kuiperbelt.Log, err = conf.Build()
+	if err != nil {
+		panic(err)
+	}
+
 	kuiperbelt.Run(port, sock, configFilename)
+}
+
+func buildLevel(level string) zapcore.Level {
+	return zapcore.InfoLevel
 }

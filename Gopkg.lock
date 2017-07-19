@@ -2,22 +2,28 @@
 
 
 [[projects]]
+  name = "go.uber.org/atomic"
+  packages = ["."]
+  revision = "4e336646b2ef9fc6e47be8e21594178f98e5ebcf"
+  version = "v1.2.0"
+
+[[projects]]
+  name = "go.uber.org/multierr"
+  packages = ["."]
+  revision = "3c4937480c32f4c13a875a1829af76c98ca3d40a"
+  version = "v1.1.0"
+
+[[projects]]
+  branch = "master"
+  name = "go.uber.org/zap"
+  packages = [".","buffer","internal/bufferpool","internal/color","internal/exit","zapcore"]
+  revision = "dadca013650a921313c28fa51e4e89e84e3e252d"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["websocket"]
   revision = "1961d9def2b2d7a28d7958926d2457d05a178ecd"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/sys"
-  packages = ["unix"]
-  revision = "075e574b89e4c2d22f2286a7e2b919519c6f3547"
-
-[[projects]]
-  branch = "master"
-  name = "gopkg.in/Sirupsen/logrus.v0"
-  packages = ["."]
-  revision = "4b6ea7319e214d98c938f12692336f7ca9348d6b"
 
 [[projects]]
   branch = "v1"
@@ -28,6 +34,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b072b6dfcf86f02595b725e7a261961da3e3883fbed1fef29abac7084f8e6045"
+  inputs-digest = "d1895adc8bb6fb02bad6d938246ade2c9269fe5db3d7c7ba69e4cab9cc7ccf61"
   solver-name = "gps-cdcl"
   solver-version = 1

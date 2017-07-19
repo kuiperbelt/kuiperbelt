@@ -13,9 +13,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"golang.org/x/net/websocket"
+	"go.uber.org/zap"
 
-	log "gopkg.in/Sirupsen/logrus.v0"
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -70,10 +70,10 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(status)
 		io.WriteString(w, err.Error())
 
-		log.WithFields(log.Fields{
-			"status": status,
-			"error":  err.Error(),
-		}).Error("connect error before upgrade")
+		Log.Error("connect error before upgrade",
+			zap.Error(err),
+			zap.Int("status", status),
+		)
 		return
 	}
 
@@ -101,9 +101,7 @@ func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		err = s.Stats.Dump(w)
 	}
 	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Error("stats dump failed")
+		Log.Error("stats dump failed", zap.Error(err))
 		http.Error(w, `{"result":"ERROR"}`, http.StatusInternalServerError)
 	}
 }
@@ -125,9 +123,12 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 			continue
 		}
 		for _, value := range values {
+			Log.Debug("set_request_header",
+				zap.String("name", _n), zap.String("value", value))
 			callbackRequest.Header.Add(n, value)
 		}
 	}
+
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
@@ -164,9 +165,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 	return func(ws *websocket.Conn) {
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err.Error(),
-			}).Error("connect error after upgrade")
+			Log.Error("connect error after upgrade", zap.Error(err))
 			s.Stats.ConnectErrorEvent()
 			return
 		}
@@ -177,9 +176,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 		}
 
 		defer DelSession(session.Key())
-		log.WithFields(log.Fields{
-			"session": session.Key(),
-		}).Info("connected session")
+		Log.Info("connected session", zap.String("session", session.Key()))
 		go session.WatchClose()
 		session.WaitClose()
 	}
@@ -246,9 +243,7 @@ func (s *WebSocketSession) WatchClose() {
 		return
 	}
 
-	log.WithFields(log.Fields{
-		"error": err.Error(),
-	}).Error("watch close frame error")
+	Log.Error("watch close frame error", zap.Error(err))
 }
 
 func (s *WebSocketSession) SendCloseCallback() {
@@ -264,37 +259,37 @@ func (s *WebSocketSession) SendCloseCallback() {
 
 	callbackRequest, err := http.NewRequest("POST", s.Config.Callback.Close, nil)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("cannot create close callback request.")
+		Log.Error("cannot create close callback request.",
+			zap.Error(err),
+			zap.String("session", s.Key()),
+		)
 		return
 	}
 
 	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("failed send close callback request.")
+		Log.Error("failed send close callback request.",
+			zap.Error(err),
+			zap.String("session", s.Key()),
+		)
 		return
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		b := new(bytes.Buffer)
 		b.ReadFrom(resp.Body)
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"status":  resp.Status,
-			"error":   b.String(),
-		}).Error("invalid close callback status.")
+		Log.Error("invalid close callback status.",
+			zap.String("session", s.Key()),
+			zap.String("status", resp.Status),
+			zap.String("error", b.String()),
+		)
 		return
 	}
 
-	log.WithFields(log.Fields{
-		"session": s.Key(),
-	}).Info("success close callback.")
+	Log.Info("success close callback.",
+		zap.String("session", s.Key()),
+	)
 }
 
 func (s *WebSocketSession) SendMessage(message *Message) error {
@@ -326,15 +321,15 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 
 	switch payloadType {
 	case websocket.TextFrame:
-		log.WithFields(log.Fields{
-			"session": message.session,
-			"message": message.buf.String(),
-		}).Debug("write messege to session")
+		Log.Debug("write messege to session",
+			zap.String("session", message.session),
+			zap.String("message", message.buf.String()),
+		)
 	case websocket.BinaryFrame:
-		log.WithFields(log.Fields{
-			"session": message.session,
-			"message": hex.EncodeToString(message.buf.Bytes()),
-		}).Debug("write messege to session")
+		Log.Debug("write messege to session",
+			zap.String("session", message.session),
+			zap.String("message", hex.EncodeToString(message.buf.Bytes())),
+		)
 	}
 
 	return message.buf.Bytes(), payloadType, nil

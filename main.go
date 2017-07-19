@@ -7,21 +7,26 @@ import (
 	"os/signal"
 	"syscall"
 
-	log "gopkg.in/Sirupsen/logrus.v0"
+	"go.uber.org/zap"
 )
 
-var Version string
+var (
+	Version string
+	Log     *zap.Logger
+)
+
+func init() {
+	Log, _ = zap.NewDevelopment()
+}
 
 func Run(port, sock, configFilename string) {
 	if port != "" && sock != "" {
-		log.Fatal("port and sock option is duplicate.")
+		Log.Fatal("port and sock option is duplicate.")
 	}
 
 	c, err := NewConfig(configFilename)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"error": err.Error(),
-		}).Fatal("load config error")
+		Log.Fatal("load config error", zap.Error(err))
 	}
 	if sock != "" {
 		c.Sock = sock
@@ -41,33 +46,32 @@ func Run(port, sock, configFilename string) {
 	if c.Sock != "" {
 		ln, err = net.Listen("unix", c.Sock)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err.Error(),
-				"sock":  c.Sock,
-			}).Fatal("listen sock error")
+			Log.Fatal("listen sock error",
+				zap.Error(err),
+				zap.String("sock", c.Sock),
+			)
 		}
-		log.WithFields(log.Fields{
-			"sock": c.Sock,
-		}).Info("listen start")
+		Log.Info("listen start",
+			zap.String("sock", c.Sock),
+		)
 	} else {
 		ln, err = net.Listen("tcp", ":"+c.Port)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"error": err.Error(),
-				"port":  c.Port,
-			}).Fatal("listen port error")
+			Log.Fatal("listen port error",
+				zap.Error(err),
+				zap.String("port", c.Port),
+			)
 		}
-		log.WithFields(log.Fields{
-			"port": c.Port,
-		}).Info("listen start")
-
+		Log.Info("listen start",
+			zap.String("port", c.Port),
+		)
 	}
 
 	startSignalHandler(ln)
 
 	err = http.Serve(ln, nil)
 	if err != nil {
-		log.Fatal("http serve error:", err)
+		Log.Fatal("http serve error:", zap.Error(err))
 	}
 }
 
@@ -78,7 +82,7 @@ func startSignalHandler(ln net.Listener) {
 		for {
 			s := <-signalCh
 			if s == syscall.SIGTERM || s == syscall.SIGINT {
-				log.Infof("received SIGTERM. shutting down...")
+				Log.Info("received SIGTERM. shutting down...")
 				ln.Close()
 			}
 		}

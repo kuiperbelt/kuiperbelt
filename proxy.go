@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	log "gopkg.in/Sirupsen/logrus.v0"
+	"go.uber.org/zap"
 )
 
 var (
@@ -184,26 +184,26 @@ func (p *Proxy) sendMessage(s Session, message *Message) error {
 		nw, err = s.Write(message.buf.Bytes())
 		if nw != message.buf.Len() {
 			p.Stats.MessageErrorEvent()
-			log.WithFields(log.Fields{
-				"session":      s.Key(),
-				"write_bytes":  message.buf.Len(),
-				"return_bytes": nw,
-			}).Error("write to session is short")
+			Log.Error("write to session is short",
+				zap.String("session", s.Key()),
+				zap.Int("write_bytes", message.buf.Len()),
+				zap.Int("return_bytes", nw),
+			)
 			return cannotSendMessageError
 		}
 	}
 	if err != nil {
 		p.Stats.MessageErrorEvent()
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("write to session error")
+		Log.Error("write to session error",
+			zap.Error(err),
+			zap.String("session", s.Key()),
+		)
 		err = s.Close()
 		if err != nil {
-			log.WithFields(log.Fields{
-				"session": s.Key(),
-				"error":   err.Error(),
-			}).Error("close session error")
+			Log.Error("close session error",
+				zap.Error(err),
+				zap.String("session", s.Key()),
+			)
 		}
 		return cannotSendMessageError
 	}
@@ -219,10 +219,10 @@ func (p *Proxy) closeSession(s Session, message *Message) {
 	s.NotifiedClose(true)
 	err = s.Close()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"session": s.Key(),
-			"error":   err.Error(),
-		}).Error("cannnot close session error")
+		Log.Error("cannnot close session error",
+			zap.Error(err),
+			zap.String("session", s.Key()),
+		)
 		return
 	}
 }
