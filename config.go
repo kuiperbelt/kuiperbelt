@@ -10,12 +10,13 @@ import (
 )
 
 type Config struct {
-	Callback        Callback `yaml:"callback"`
-	SessionHeader   string   `yaml:"session_header"`
-	Port            string   `yaml:"port"`
-	Sock            string   `yaml:"sock"`
-	Endpoint        string   `yaml:"endpoint"`
-	StrictBroadcast bool     `yaml:"strict_broadcast"`
+	Callback        Callback          `yaml:"callback"`
+	SessionHeader   string            `yaml:"session_header"`
+	Port            string            `yaml:"port"`
+	Sock            string            `yaml:"sock"`
+	Endpoint        string            `yaml:"endpoint"`
+	StrictBroadcast bool              `yaml:"strict_broadcast"`
+	ProxySetHeader  map[string]string `yaml:"proxy_set_header"`
 }
 
 type Callback struct {
