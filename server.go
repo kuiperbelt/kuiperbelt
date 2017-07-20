@@ -128,6 +128,13 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 			callbackRequest.Header.Add(n, value)
 		}
 	}
+	for name, value := range s.Config.ProxySetHeader {
+		if value == "" {
+			callbackRequest.Header.Del(name)
+		} else {
+			callbackRequest.Header.Set(name, value)
+		}
+	}
 
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
@@ -267,6 +274,14 @@ func (s *WebSocketSession) SendCloseCallback() {
 	}
 
 	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
+	for name, value := range s.Config.ProxySetHeader {
+		if value == "" {
+			callbackRequest.Header.Del(name)
+		} else {
+			callbackRequest.Header.Set(name, value)
+		}
+	}
+
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
 		Log.Error("failed send close callback request.",
