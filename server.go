@@ -118,6 +118,14 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 			callbackRequest.Header.Add(n, value)
 		}
 	}
+	for name, value := range s.Config.ProxySetHeader {
+		if value == "" {
+			callbackRequest.Header.Del(name)
+		} else {
+			callbackRequest.Header.Set(name, value)
+		}
+	}
+
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	resp, err := callbackClient.Do(callbackRequest)
 	if err != nil {
@@ -271,8 +279,17 @@ func (s *WebSocketSession) sendCloseCallback() {
 		}).Error("cannot create close callback request.")
 		return
 	}
+
 	req.Header.Add(s.server.Config.SessionHeader, s.Key())
+	for name, value := range s.server.Config.ProxySetHeader {
+		if value == "" {
+			req.Header.Del(name)
+		} else {
+			req.Header.Set(name, value)
+		}
+	}
 	resp, err := callbackClient.Do(req)
+
 	if err != nil {
 		log.WithFields(log.Fields{
 			"session": s.Key(),

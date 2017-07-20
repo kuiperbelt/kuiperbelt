@@ -23,6 +23,10 @@ var TestConfig = Config{
 	},
 	SendTimeout:   time.Second,
 	SendQueueSize: 1,
+	ProxySetHeader: map[string]string{
+		"X-Foo":           "Foo",
+		"X-Forwarded-For": "", // will be removed
+	},
 }
 
 func TestConfig__Unmarshal(t *testing.T) {

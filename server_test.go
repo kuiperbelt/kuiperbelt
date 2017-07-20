@@ -65,6 +65,15 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 			return
 		}
 	}
+	if r.Header.Get("X-Forwarded-For") != "" {
+		http.Error(w, "X-Forwarded-For must be removed", http.StatusBadRequest)
+		return
+	}
+	if r.Header.Get("X-Foo") != "Foo" {
+		http.Error(w, "X-Foo is unexpected", http.StatusBadRequest)
+		return
+	}
+
 	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, testHelloMessage)
@@ -98,6 +107,7 @@ func newTestWebSocketRequest(url string) (*http.Request, error) {
 	req.Header.Add("Sec-WebSocket-Protocol", "kuiperbelt")
 	req.Header.Add("Sec-WebSocket-Version", "13")
 	req.Header.Add("Sec-WebSocket-Key", testSecWebSocketKey)
+	req.Header.Add("X-Forwarded-For", "192.168.1.1")
 	req.Header.Add(testRequestSessionHeader, "hogehoge")
 
 	return req, nil
