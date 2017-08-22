@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	"gopkg.in/yaml.v1"
 )
@@ -17,6 +18,8 @@ type Config struct {
 	Endpoint        string            `yaml:"endpoint"`
 	StrictBroadcast bool              `yaml:"strict_broadcast"`
 	ProxySetHeader  map[string]string `yaml:"proxy_set_header"`
+	SendTimeout     time.Duration     `yaml:"send_timeout"`
+	SendQueueSize   int               `yaml:"send_queue_size"`
 }
 
 type Callback struct {

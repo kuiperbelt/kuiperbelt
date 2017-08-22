@@ -3,13 +3,13 @@ package kuiperbelt
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
-
-	"io/ioutil"
 
 	"golang.org/x/net/websocket"
 )
@@ -21,14 +21,36 @@ const (
 )
 
 type testSuccessConnectCallbackServer struct {
-	IsCallbacked bool
-	IsClosed     bool
-	Header       http.Header
+	mu           sync.Mutex
+	isCallbacked bool
+	isClosed     bool
+	header       http.Header
+}
+
+func (s *testSuccessConnectCallbackServer) IsCallbacked() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isCallbacked
+}
+
+func (s *testSuccessConnectCallbackServer) IsClosed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.isCallbacked
+}
+
+func (s *testSuccessConnectCallbackServer) Header() http.Header {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.header
 }
 
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsCallbacked = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.mu.Unlock()
+
 	if r.Header.Get("Connection") == "upgrade" {
 		http.Error(w, "Connection header is upgrade", http.StatusBadRequest)
 		return
@@ -37,7 +59,7 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 		http.Error(w, "Upgrade header is sent", http.StatusBadRequest)
 		return
 	}
-	for n, _ := range r.Header {
+	for n := range r.Header {
 		if strings.HasPrefix(strings.ToLower(n), "sec-websocket") {
 			http.Error(w, n+" header is sent", http.StatusBadRequest)
 			return
@@ -58,15 +80,19 @@ func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter,
 }
 
 func (s *testSuccessConnectCallbackServer) FailHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsCallbacked = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.mu.Unlock()
 	w.WriteHeader(http.StatusForbidden)
 	io.WriteString(w, "fail authorization!")
 }
 
 func (s *testSuccessConnectCallbackServer) CloseHandler(w http.ResponseWriter, r *http.Request) {
-	s.IsClosed = true
-	s.Header = r.Header
+	s.mu.Lock()
+	s.isClosed = true
+	s.header = r.Header
+	s.mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, "")
 }
@@ -88,13 +114,14 @@ func newTestWebSocketRequest(url string) (*http.Request, error) {
 }
 
 func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
 
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -114,31 +141,32 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 		t.Error("unexpected status code:", resp.StatusCode)
 	}
 
-	if !callbackServer.IsCallbacked {
+	if !callbackServer.IsCallbacked() {
 		t.Error("callback server doesn't receive request")
 	}
-	if callbackServer.Header.Get(testRequestSessionHeader) != "hogehoge" {
+	if callbackServer.Header().Get(testRequestSessionHeader) != "hogehoge" {
 		t.Error(
 			"callback server doesn't receive session key:",
-			callbackServer.Header.Get(testRequestSessionHeader),
+			callbackServer.Header().Get(testRequestSessionHeader),
 		)
 	}
-	if callbackServer.Header.Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
+	if callbackServer.Header().Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
 		t.Error(
 			"callback server doesn't receive endpoint name:",
-			callbackServer.Header.Get(testRequestSessionHeader),
+			callbackServer.Header().Get(testRequestSessionHeader),
 		)
 	}
 }
 
 func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.FailHandler))
 
 	c := TestConfig
 	c.Callback.Connect = tcc.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -166,6 +194,7 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 }
 
 func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
+	var pool SessionPool
 	callbackServer := new(testSuccessConnectCallbackServer)
 	tcc1 := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
 	tcc2 := httptest.NewServer(http.HandlerFunc(callbackServer.CloseHandler))
@@ -174,7 +203,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	c.Callback.Connect = tcc1.URL
 	c.Callback.Close = tcc2.URL
 
-	server := NewWebSocketServer(c, NewStats())
+	server := NewWebSocketServer(c, NewStats(), &pool)
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
@@ -191,7 +220,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 
 	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
 
-	_, err = GetSession("hogehoge")
+	_, err = pool.Get("hogehoge")
 	if err != nil {
 		t.Fatal("cannot get session error:", err)
 	}
@@ -209,7 +238,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		time.Sleep(10 * time.Millisecond)
 
-		_, err = GetSession("hogehoge")
+		_, err = pool.Get("hogehoge")
 		if err != nil {
 			break
 		}
@@ -219,7 +248,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		t.Error("not removed session:", err)
 	}
 
-	if !callbackServer.IsClosed {
+	if !callbackServer.IsClosed() {
 		t.Error("not receive close callback")
 	}
 
