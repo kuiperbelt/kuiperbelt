@@ -2,18 +2,18 @@ package kuiperbelt
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/net/websocket"
-
 	log "gopkg.in/Sirupsen/logrus.v0"
 )
 
@@ -23,36 +23,28 @@ const (
 )
 
 var (
-	sessionKeyNotExistError            = errors.New("session key is not exist.")
-	connectCallbackIsNotAvailableError = errors.New("connect callback is not available.")
-	callbackClient                     = new(http.Client)
-	sendWsCodec                        = websocket.Codec{
+	callbackClient = new(http.Client)
+	sendWsCodec    = websocket.Codec{
 		Marshal:   messageMarshal,
 		Unmarshal: nil,
 	}
 )
 
-type ConnectCallbackError struct {
-	Status int
-	error  error
-}
-
-func (e ConnectCallbackError) Error() string {
-	return e.error.Error()
-}
-
 type WebSocketServer struct {
 	Config Config
 	Stats  *Stats
+	Pool   *SessionPool
 }
 
-func NewWebSocketServer(c Config, s *Stats) *WebSocketServer {
+func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 	return &WebSocketServer{
 		Config: c,
 		Stats:  s,
+		Pool:   p,
 	}
 }
 
+// Handler handles websocket connection requests.
 func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -61,22 +53,19 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
-		defer s.Stats.ConnectErrorEvent()
-		status := http.StatusInternalServerError
-		if ce, ok := err.(ConnectCallbackError); ok {
-			status = ce.Status
-		}
-		w.WriteHeader(status)
-		io.WriteString(w, err.Error())
-
 		log.WithFields(log.Fields{
-			"status": status,
-			"error":  err.Error(),
+			"error": err.Error(),
 		}).Error("connect error before upgrade")
+		s.Stats.ConnectErrorEvent()
 		return
 	}
 
-	server := websocket.Server{Handler: websocket.Handler(s.NewWebSocketHandler(resp))}
+	handler, err := s.NewWebSocketHandler(resp)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	server := websocket.Server{Handler: websocket.Handler(handler)}
 	server.ServeHTTP(w, r)
 }
 
@@ -103,23 +92,25 @@ func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
 		log.WithFields(log.Fields{
 			"error": err.Error(),
 		}).Error("stats dump failed")
-		http.Error(w, `{"result":"ERROR"}`, http.StatusInternalServerError)
+		panic(http.ErrAbortHandler)
 	}
 }
 
 func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.Request) (*http.Response, error) {
-	callbackUrl, err := url.ParseRequestURI(s.Config.Callback.Connect)
+	callback, err := url.ParseRequestURI(s.Config.Callback.Connect)
 	if err != nil {
-		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return nil, err
 	}
-	callbackUrl.RawQuery = r.URL.RawQuery
-	callbackRequest, err := http.NewRequest(r.Method, callbackUrl.String(), r.Body)
+	callback.RawQuery = r.URL.RawQuery
+	callbackRequest, err := http.NewRequest(r.Method, callback.String(), r.Body)
 	if err != nil {
-		return nil, ConnectCallbackError{http.StatusInternalServerError, err}
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return nil, err
 	}
 	// copy all headers except "Connection", "Upgrade" and "Sec-Websocket*"
-	for _n, values := range r.Header {
-		n := strings.ToLower(_n)
+	for n, values := range r.Header {
+		n := strings.ToLower(n)
 		if n == "connection" || n == "upgrade" || strings.HasPrefix(n, "sec-websocket") {
 			continue
 		}
@@ -127,40 +118,52 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 			callbackRequest.Header.Add(n, value)
 		}
 	}
-	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
-	resp, err := callbackClient.Do(callbackRequest)
-	if err != nil {
-		return nil, ConnectCallbackError{
-			http.StatusBadGateway,
-			fmt.Errorf("%s %s", connectCallbackIsNotAvailableError, err),
+	for name, value := range s.Config.ProxySetHeader {
+		if value == "" {
+			callbackRequest.Header.Del(name)
+		} else {
+			callbackRequest.Header.Set(name, value)
 		}
 	}
 
+	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
+	resp, err := callbackClient.Do(callbackRequest)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
+		return nil, err
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
-		b := new(bytes.Buffer)
-		b.ReadFrom(resp.Body)
-		return nil, ConnectCallbackError{resp.StatusCode, errors.New(b.String())}
+		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+		w.WriteHeader(resp.StatusCode)
+		io.Copy(w, resp.Body)
+		resp.Body.Close()
+		return nil, errors.New(http.StatusText(http.StatusInternalServerError))
 	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
 		resp.Body.Close()
-		return nil, ConnectCallbackError{http.StatusBadRequest, sessionKeyNotExistError}
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return nil, errors.New("kuiperbelt: session key header is not exist")
 	}
 
 	return resp, nil
 }
 
-func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *websocket.Conn) {
+func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *websocket.Conn), error) {
 	defer resp.Body.Close()
 	key := resp.Header.Get(s.Config.SessionHeader)
-	b := new(bytes.Buffer)
-	io.Copy(b, resp.Body)
-	message := &Message{
-		buf:         b,
-		contentType: resp.Header.Get("Content-Type"),
+	var b bytes.Buffer
+	if _, err := b.ReadFrom(resp.Body); err != nil {
+		return nil, err
+	}
+	message := Message{
+		Body:        b.Bytes(),
+		ContentType: resp.Header.Get("Content-Type"),
+		Session:     key,
 	}
 	return func(ws *websocket.Conn) {
+		// register a new websocket sesssion.
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -169,96 +172,106 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) func(ws *webs
 			s.Stats.ConnectErrorEvent()
 			return
 		}
-		AddSession(session)
-		if message.buf.Len() > 0 {
-			s.Stats.MessageEvent()
-			session.SendMessage(message)
-		}
+		s.Pool.Add(session)
+		defer s.Pool.Delete(session.Key())
 
-		defer DelSession(session.Key())
-		log.WithFields(log.Fields{
-			"session": session.Key(),
-		}).Info("connected session")
-		go session.WatchClose()
-		session.WaitClose()
-	}
+		// send the first message.
+		if len(message.Body) > 0 {
+			s.Stats.MessageEvent()
+			if err := sendWsCodec.Send(ws, message); err != nil {
+				s.Stats.MessageErrorEvent()
+				return
+			}
+		}
+		go session.sendMessages()
+		session.recvMessages()
+	}, nil
 }
 
 func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
-	closeCh := make(chan struct{})
-	onceClose := sync.Once{}
-	session := &WebSocketSession{ws, key, closeCh, s.Config, onceClose, new(atomic.Value)}
+	send := make(chan Message, s.Config.SendQueueSize)
+	session := &WebSocketSession{
+		ws:       ws,
+		key:      key,
+		server:   s,
+		send:     send,
+		closedch: make(chan struct{}),
+	}
 
 	return session, nil
 }
 
-type WebSocketSession struct {
-	*websocket.Conn
-	key             string
-	closeCh         chan struct{}
-	Config          Config
-	onceClose       sync.Once
-	isNotifiedClose *atomic.Value
+func (s *WebSocketServer) Shutdown(ctx context.Context) error {
+	msg := Message{LastWord: true}
+	sessions := s.Pool.List()
+	for _, s := range sessions {
+		q := s.Send()
+		if q == nil {
+			continue
+		}
+		go func() {
+			select {
+			case q <- msg:
+			case <-ctx.Done():
+			}
+		}()
+	}
+
+	for s.Stats.Connections() > 0 && s.Stats.ClosingConnections() > 0 {
+		select {
+		default:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
 }
 
+type WebSocketSession struct {
+	ws       *websocket.Conn
+	key      string
+	server   *WebSocketServer
+	send     chan Message
+	closed   uint32 // accessed atomically
+	closedch chan struct{}
+}
+
+// Key returns the session key.
 func (s *WebSocketSession) Key() string {
 	return s.key
 }
 
-func (s *WebSocketSession) NotifiedClose(isNotified bool) {
-	s.isNotifiedClose.Store(isNotified)
+// Send returns the channel for sending messages.
+func (s *WebSocketSession) Send() chan<- Message {
+	if atomic.LoadUint32(&s.closed) != 0 {
+		return nil
+	}
+	return s.send
 }
 
+// Close closes the session.
 func (s *WebSocketSession) Close() error {
-	var err error
-	s.onceClose.Do(func() {
-		err = DelSession(s.Key())
-		if err != nil {
-			return
-		}
-		err = s.Conn.Close()
-		if err != nil {
-			return
-		}
-		s.closeCh <- struct{}{}
-	})
-	return nil
+	if atomic.SwapUint32(&s.closed, 1) != 0 {
+		return nil
+	}
+	s.server.Pool.Delete(s.key)
+	close(s.closedch)
+	if s.server.Config.Callback.Close != "" {
+		s.server.Stats.ClosingEvent()
+		go s.sendCloseCallback()
+	}
+	return s.ws.Close()
 }
 
-func (s *WebSocketSession) WaitClose() {
-	<-s.closeCh
+func (s *WebSocketSession) Closed() <-chan struct{} {
+	return s.closedch
 }
 
-func (s *WebSocketSession) WatchClose() {
-	defer s.Close()
-	defer func() { go s.SendCloseCallback() }()
-	buf := make([]byte, ioBufferSize)
-	_, err := io.CopyBuffer(new(blackholeWriter), s, buf)
-	if err == nil {
-		return
-	}
-	// ignore closed session error
-	if strings.HasSuffix(err.Error(), "use of closed network connection") {
-		return
-	}
-
-	log.WithFields(log.Fields{
-		"error": err.Error(),
-	}).Error("watch close frame error")
-}
-
-func (s *WebSocketSession) SendCloseCallback() {
-	// cancel sending when not set callback url
-	if s.Config.Callback.Close == "" {
-		return
-	}
-
-	// cancel sending when notified closed already
-	if isNotified, ok := s.isNotifiedClose.Load().(bool); ok && isNotified {
-		return
-	}
-
-	callbackRequest, err := http.NewRequest("POST", s.Config.Callback.Close, nil)
+func (s *WebSocketSession) sendCloseCallback() {
+	defer s.server.Stats.ClosedEvent()
+	req, err := http.NewRequest("POST", s.server.Config.Callback.Close, nil)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"session": s.Key(),
@@ -267,51 +280,90 @@ func (s *WebSocketSession) SendCloseCallback() {
 		return
 	}
 
-	callbackRequest.Header.Add(s.Config.SessionHeader, s.Key())
-	resp, err := callbackClient.Do(callbackRequest)
+	req.Header.Add(s.server.Config.SessionHeader, s.Key())
+	for name, value := range s.server.Config.ProxySetHeader {
+		if value == "" {
+			req.Header.Del(name)
+		} else {
+			req.Header.Set(name, value)
+		}
+	}
+	resp, err := callbackClient.Do(req)
+
 	if err != nil {
 		log.WithFields(log.Fields{
 			"session": s.Key(),
 			"error":   err.Error(),
 		}).Error("failed send close callback request.")
-		return
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b := new(bytes.Buffer)
-		b.ReadFrom(resp.Body)
+
+	buf, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
 		log.WithFields(log.Fields{
 			"session": s.Key(),
 			"status":  resp.Status,
-			"error":   b.String(),
+			"error":   err.Error(),
 		}).Error("invalid close callback status.")
 		return
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		log.WithFields(log.Fields{
+			"session": s.Key(),
+			"status":  resp.Status,
+			"error":   string(buf),
+		}).Error("invalid close callback status.")
+	}
 	log.WithFields(log.Fields{
 		"session": s.Key(),
 	}).Info("success close callback.")
 }
 
-func (s *WebSocketSession) SendMessage(message *Message) error {
-	message.session = s.key
-	return sendWsCodec.Send(s.Conn, message)
+func (s *WebSocketSession) sendMessages() {
+	for {
+		select {
+		case msg := <-s.send:
+			if err := sendWsCodec.Send(s.ws, msg); err != nil {
+				s.server.Stats.MessageErrorEvent()
+				s.Close()
+				return
+			}
+			if msg.LastWord {
+				s.Close()
+				return
+			}
+		case <-s.closedch:
+			return
+		}
+	}
 }
 
-type Message struct {
-	buf         *bytes.Buffer
-	contentType string
-	session     string
+func (s *WebSocketSession) recvMessages() {
+	defer s.Close()
+	buf := make([]byte, ioBufferSize)
+	_, err := io.CopyBuffer(ioutil.Discard, s.ws, buf)
+	if err == nil {
+		return
+	}
+	// ignore closed session error
+	if atomic.LoadUint32(&s.closed) != 0 {
+		return
+	}
+
+	log.WithFields(log.Fields{
+		"error": err.Error(),
+	}).Error("watch close frame error")
 }
 
 func messageMarshal(v interface{}) ([]byte, byte, error) {
-	message, ok := v.(*Message)
+	message, ok := v.(Message)
 	if !ok {
-		return nil, 0x0, errors.New("value is not *kuiperbelt.Message.")
+		return nil, 0x0, errors.New("kuiperbelt: value is not kuiperbelt.Message")
 	}
 
+	// parce Content-Type
 	payloadType := byte(websocket.TextFrame)
-	contentType := message.contentType
+	contentType := message.ContentType
 	if i := strings.Index(contentType, ";"); i >= 0 {
 		contentType = contentType[0:i]
 	}
@@ -323,22 +375,15 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	switch payloadType {
 	case websocket.TextFrame:
 		log.WithFields(log.Fields{
-			"session": message.session,
-			"message": message.buf.String(),
+			"session": message.Session,
+			"message": string(message.Body),
 		}).Debug("write messege to session")
 	case websocket.BinaryFrame:
 		log.WithFields(log.Fields{
-			"session": message.session,
-			"message": hex.EncodeToString(message.buf.Bytes()),
+			"session": message.Session,
+			"message": hex.EncodeToString(message.Body),
 		}).Debug("write messege to session")
 	}
 
-	return message.buf.Bytes(), payloadType, nil
-}
-
-type blackholeWriter struct {
-}
-
-func (bw *blackholeWriter) Write(p []byte) (int, error) {
-	return len(p), nil
+	return message.Body, payloadType, nil
 }
