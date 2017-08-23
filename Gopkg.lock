@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/google/gops"
+  packages = ["agent","internal","signal"]
+  revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
+  version = "v0.3.1"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/net"
   packages = ["websocket"]
@@ -28,6 +34,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b072b6dfcf86f02595b725e7a261961da3e3883fbed1fef29abac7084f8e6045"
+  inputs-digest = "23ca4d35d9aae58acbcd13a90f0fd5295b9bcdf7515156b2df559d15136f3e2a"
   solver-name = "gps-cdcl"
   solver-version = 1
