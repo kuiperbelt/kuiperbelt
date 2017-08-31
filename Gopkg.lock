@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/google/gops"
+  packages = ["agent","internal","signal"]
+  revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
+  version = "v0.3.1"
+
+[[projects]]
   name = "go.uber.org/atomic"
   packages = ["."]
   revision = "4e336646b2ef9fc6e47be8e21594178f98e5ebcf"
@@ -34,6 +40,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d1895adc8bb6fb02bad6d938246ade2c9269fe5db3d7c7ba69e4cab9cc7ccf61"
+  inputs-digest = "8926c73575ee41dfce5e40366f6f43fd5069471b53c381209db226bc2eedfbb1"
   solver-name = "gps-cdcl"
   solver-version = 1
