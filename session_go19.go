@@ -1,4 +1,4 @@
-// +build !go1.9
+// +build go1.9
 
 package kuiperbelt
 
@@ -11,8 +11,7 @@ var errSessionNotFound = errors.New("kuiperbelt: session is not found")
 
 // SessionPool is a pool of sessions.
 type SessionPool struct {
-	mu sync.RWMutex
-	m  map[string]Session
+	m sync.Map
 }
 
 // Message is a message container for communicating through sessions.
@@ -33,43 +32,31 @@ type Session interface {
 
 // Add add new session into the SessionPool.
 func (p *SessionPool) Add(s Session) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.m == nil {
-		p.m = make(map[string]Session)
-	}
-	p.m[s.Key()] = s
+	p.m.Store(s.Key(), s)
 }
 
 // Get gets a session from the SessionPool.
 func (p *SessionPool) Get(key string) (Session, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	s, ok := p.m[key]
+	s, ok := p.m.Load(key)
 	if !ok {
 		return nil, errSessionNotFound
 	}
-	return s, nil
+	return s.(Session), nil
 }
 
 // Delete deletes a session.
 func (p *SessionPool) Delete(key string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.m == nil {
-		return nil
-	}
-	delete(p.m, key)
+	p.m.Delete(key)
 	return nil
 }
 
 // List returns a slice of all sessions in the pool.
 func (p *SessionPool) List() []Session {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	sessions := make([]Session, 0, len(p.m))
-	for _, s := range p.m {
-		sessions = append(sessions, s)
-	}
+	sessions := make([]Session, 0)
+	p.m.Range(func(key, value interface{}) bool {
+		sessions = append(sessions, value.(Session))
+		return true
+	})
+
 	return sessions
 }

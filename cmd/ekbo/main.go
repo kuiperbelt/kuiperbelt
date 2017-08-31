@@ -3,14 +3,19 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/google/gops/agent"
 	"github.com/mackee/kuiperbelt"
 )
 
 func main() {
+	if err := agent.Listen(nil); err != nil {
+		log.Fatal(err)
+	}
 	var configFilename, logLevel, port, sock string
 	var showVersion bool
 	var err error

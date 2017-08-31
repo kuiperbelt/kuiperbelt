@@ -1,11 +1,13 @@
 package kuiperbelt
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -35,11 +37,12 @@ func Run(port, sock, configFilename string) {
 	}
 
 	st := NewStats()
+	var pool SessionPool
 
-	p := NewProxy(*c, st)
+	p := NewProxy(*c, st, &pool)
 	p.Register()
 
-	s := NewWebSocketServer(*c, st)
+	s := NewWebSocketServer(*c, st, &pool)
 	s.Register()
 
 	var ln net.Listener
@@ -67,24 +70,39 @@ func Run(port, sock, configFilename string) {
 		)
 	}
 
-	startSignalHandler(ln)
-
-	err = http.Serve(ln, nil)
-	if err != nil {
-		Log.Fatal("http serve error:", zap.Error(err))
-	}
-}
-
-func startSignalHandler(ln net.Listener) {
-	signalCh := make(chan os.Signal)
-	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+	server := &http.Server{}
 	go func() {
-		for {
-			s := <-signalCh
-			if s == syscall.SIGTERM || s == syscall.SIGINT {
-				Log.Info("received SIGTERM. shutting down...")
-				ln.Close()
-			}
+		err := server.Serve(ln)
+		if err == http.ErrServerClosed {
+			return
+		}
+		if err != nil {
+			Log.Fatal("http serve error:", zap.Error(err))
 		}
 	}()
+
+	waitForSignal()
+
+	// Shutdown gracefully
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	server.Shutdown(ctx)
+	s.Shutdown(ctx)
+}
+
+func waitForSignal() {
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGTERM, syscall.SIGINT)
+	defer signal.Stop(signalCh)
+
+	for s := range signalCh {
+		switch s {
+		case syscall.SIGTERM:
+			Log.Info("received SIGTERM. shutting down...")
+			return
+		case syscall.SIGINT:
+			Log.Info("received SIGINT. shutting down...")
+			return
+		}
+	}
 }
