@@ -72,7 +72,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "gopkg.in/Sirupsen/logrus.v0"
+  name = "go.uber.org/zap"
 
 [[constraint]]
   branch = "v1"

@@ -3,7 +3,7 @@ package kuiperbelt
 import (
 	"net/http"
 
-	log "gopkg.in/Sirupsen/logrus.v0"
+	"go.uber.org/zap"
 )
 
 type loggingHandler struct {
@@ -46,10 +46,10 @@ func (h loggingHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	url := *req.URL
 	method := req.Method
 
-	log.WithFields(log.Fields{
-		"method": method,
-		"url":    url.String(),
-		"status": logger.status,
-		"size":   logger.size,
-	}).Info("access")
+	Log.Info("access",
+		zap.String("method", method),
+		zap.String("url", url.String()),
+		zap.Int("status", logger.status),
+		zap.Int("size", logger.size),
+	)
 }
