@@ -57,7 +57,7 @@ func (p *SessionPool) Delete(key string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.m == nil {
-		return nil
+		return errSessionNotFound
 	}
 	if _, ok := p.m[key]; !ok {
 		return errSessionNotFound
