@@ -1,5 +1,9 @@
 package kuiperbelt
 
+import (
+	"testing"
+)
+
 type TestSession struct {
 	send chan Message
 	key  string
@@ -19,4 +23,12 @@ func (s *TestSession) Close() error {
 
 func (s *TestSession) Closed() <-chan struct{} {
 	return nil
+}
+
+func TestSessionPool__DeleteUnknownKey(t *testing.T) {
+	sp := &SessionPool{}
+	err := sp.Delete("unknown_key")
+	if err != errSessionNotFound {
+		t.Error("return not errSessionNotFound error when Delete unknown key.")
+	}
 }

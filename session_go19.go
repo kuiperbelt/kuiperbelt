@@ -46,6 +46,10 @@ func (p *SessionPool) Get(key string) (Session, error) {
 
 // Delete deletes a session.
 func (p *SessionPool) Delete(key string) error {
+	// XXX: This checker is weak for race.
+	if _, ok := p.m.Load(key); !ok {
+		return errSessionNotFound
+	}
 	p.m.Delete(key)
 	return nil
 }

@@ -59,6 +59,9 @@ func (p *SessionPool) Delete(key string) error {
 	if p.m == nil {
 		return nil
 	}
+	if _, ok := p.m[key]; !ok {
+		return errSessionNotFound
+	}
 	delete(p.m, key)
 	return nil
 }
