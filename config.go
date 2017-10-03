@@ -10,6 +10,10 @@ import (
 	"gopkg.in/yaml.v1"
 )
 
+const (
+	DefaultPort = "9180"
+)
+
 type Config struct {
 	Callback        Callback          `yaml:"callback"`
 	SessionHeader   string            `yaml:"session_header"`
@@ -54,6 +58,9 @@ func unmarshalConfig(b []byte) (*Config, error) {
 			return nil, err
 		}
 
+		if config.Port == "" {
+			config.Port = DefaultPort
+		}
 		p, err := strconv.Atoi(config.Port)
 		if err != nil {
 			return nil, err
