@@ -32,12 +32,6 @@
   revision = "dadca013650a921313c28fa51e4e89e84e3e252d"
 
 [[projects]]
-  branch = "master"
-  name = "golang.org/x/net"
-  packages = ["websocket"]
-  revision = "1961d9def2b2d7a28d7958926d2457d05a178ecd"
-
-[[projects]]
   branch = "v1"
   name = "gopkg.in/yaml.v1"
   packages = ["."]
@@ -46,6 +40,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6ff859a933cacd0f67b8b1d00f3ef3d9e16ff4e06cd205b70a29ddd109edddd1"
+  inputs-digest = "ee784cb9ade8effba2dc94ef4f984083d4749d60f05a1a172940698150b5526e"
   solver-name = "gps-cdcl"
   solver-version = 1
