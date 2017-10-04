@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
-	xws "golang.org/x/net/websocket"
 )
 
 const (
@@ -24,9 +24,9 @@ const (
 
 var (
 	callbackClient = new(http.Client)
-	sendWsCodec    = xws.Codec{
-		Marshal:   messageMarshal,
-		Unmarshal: nil,
+	upgrader       = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
 )
 
@@ -60,13 +60,20 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler, err := s.NewWebSocketHandler(resp)
+	wsHandler, err := s.NewWebSocketHandler(resp)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	server := xws.Server{Handler: xws.Handler(handler)}
-	server.ServeHTTP(w, r)
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		Log.Error("cannot upgrade",
+			zap.Error(err),
+		)
+		s.Stats.ConnectErrorEvent()
+		return
+	}
+	wsHandler(conn)
 }
 
 func (s *WebSocketServer) Register() {
@@ -150,7 +157,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	return resp, nil
 }
 
-func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *xws.Conn), error) {
+func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *websocket.Conn), error) {
 	defer resp.Body.Close()
 	key := resp.Header.Get(s.Config.SessionHeader)
 	var b bytes.Buffer
@@ -162,7 +169,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *xws
 		ContentType: resp.Header.Get("Content-Type"),
 		Session:     key,
 	}
-	return func(ws *xws.Conn) {
+	return func(ws *websocket.Conn) {
 		// register a new websocket sesssion.
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
@@ -176,7 +183,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *xws
 		// send the first message.
 		if len(message.Body) > 0 {
 			s.Stats.MessageEvent()
-			if err := sendWsCodec.Send(ws, message); err != nil {
+			if err := session.writeMessage(message); err != nil {
 				s.Stats.MessageErrorEvent()
 				return
 			}
@@ -186,7 +193,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *xws
 	}, nil
 }
 
-func (s *WebSocketServer) NewWebSocketSession(key string, ws *xws.Conn) (*WebSocketSession, error) {
+func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
 	send := make(chan Message, s.Config.SendQueueSize)
 	session := &WebSocketSession{
 		ws:       ws,
@@ -228,7 +235,7 @@ func (s *WebSocketServer) Shutdown(ctx context.Context) error {
 }
 
 type WebSocketSession struct {
-	ws       *xws.Conn
+	ws       *websocket.Conn
 	key      string
 	server   *WebSocketServer
 	send     chan Message
@@ -322,7 +329,7 @@ func (s *WebSocketSession) sendMessages() {
 	for {
 		select {
 		case msg := <-s.send:
-			if err := sendWsCodec.Send(s.ws, msg); err != nil {
+			if err := s.writeMessage(msg); err != nil {
 				s.server.Stats.MessageErrorEvent()
 				s.Close()
 				return
@@ -339,50 +346,73 @@ func (s *WebSocketSession) sendMessages() {
 
 func (s *WebSocketSession) recvMessages() {
 	defer s.Close()
-	buf := make([]byte, ioBufferSize)
-	_, err := io.CopyBuffer(ioutil.Discard, s.ws, buf)
-	if err == nil {
-		return
+	for {
+		_, r, err := s.ws.NextReader()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				Log.Error(
+					"unexpected error on read messages",
+					zap.Error(err),
+				)
+			}
+			break
+		}
+		buf := make([]byte, ioBufferSize)
+		_, err = io.CopyBuffer(ioutil.Discard, r, buf)
+		if err != nil {
+			break
+		}
 	}
+
 	// ignore closed session error
 	if atomic.LoadUint32(&s.closed) != 0 {
 		return
 	}
 
-	Log.Error("watch close frame error",
-		zap.Error(err),
-	)
+	Log.Error("watch close frame error")
 }
 
-func messageMarshal(v interface{}) ([]byte, byte, error) {
+func (s *WebSocketSession) writeMessage(message Message) error {
+	bs, messageType, err := messageMarshal(message)
+	if err != nil {
+		return err
+	}
+	err = s.ws.WriteMessage(messageType, bs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func messageMarshal(v interface{}) ([]byte, int, error) {
 	message, ok := v.(Message)
 	if !ok {
 		return nil, 0x0, errors.New("kuiperbelt: value is not kuiperbelt.Message")
 	}
 
 	// parce Content-Type
-	payloadType := byte(xws.TextFrame)
+	messageType := websocket.TextMessage
 	contentType := message.ContentType
 	if i := strings.Index(contentType, ";"); i >= 0 {
 		contentType = contentType[0:i]
 	}
 	contentType = strings.TrimSpace(contentType)
 	if strings.EqualFold(contentType, "application/octet-stream") {
-		payloadType = xws.BinaryFrame
+		messageType = websocket.BinaryMessage
 	}
 
-	switch payloadType {
-	case xws.TextFrame:
+	switch messageType {
+	case websocket.TextMessage:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", string(message.Body)),
 		)
-	case xws.BinaryFrame:
+	case websocket.BinaryMessage:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", hex.EncodeToString(message.Body)),
 		)
 	}
 
-	return message.Body, payloadType, nil
+	return message.Body, messageType, nil
 }

@@ -208,7 +208,7 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
-	wsConfig, err := xws.NewConfig(wsURL, "http://localhost/")
+	wsConfig, err := xws.NewConfig(wsURL, tc.URL)
 	if err != nil {
 		t.Fatal("cannot create connection config error:", err)
 	}

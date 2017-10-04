@@ -86,7 +86,7 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 	th := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
-	wsConfig, err := xws.NewConfig(wsURL, "http://localhost/")
+	wsConfig, err := xws.NewConfig(wsURL, th.URL)
 	if err != nil {
 		t.Fatal("cannot create connection config error:", err)
 	}
