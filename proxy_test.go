@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"golang.org/x/net/websocket"
+	xws "golang.org/x/net/websocket"
 )
 
 func TestProxySendHandlerFunc__BulkSend(t *testing.T) {
@@ -86,21 +86,21 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 	th := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
-	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost/")
+	wsConfig, err := xws.NewConfig(wsURL, "http://localhost/")
 	if err != nil {
 		t.Fatal("cannot create connection config error:", err)
 	}
 	wsConfig.Header.Add(testRequestSessionHeader, "hogehoge")
-	conn, err := websocket.DialConfig(wsConfig)
+	conn, err := xws.DialConfig(wsConfig)
 	if err != nil {
 		t.Fatal("cannot connect error:", err)
 	}
 
 	// ignore hello message
 	var hello string
-	websocket.Message.Receive(conn, &hello)
+	xws.Message.Receive(conn, &hello)
 
-	codec := &websocket.Codec{
+	codec := &xws.Codec{
 		Unmarshal: func(data []byte, payloadType byte, v interface{}) error {
 			rb, _ := v.(*byte)
 			*rb = payloadType
@@ -122,7 +122,7 @@ func TestProxySendHandlerFunc__SendInBinary(t *testing.T) {
 
 	var rb byte
 	codec.Receive(conn, &rb)
-	if rb != websocket.BinaryFrame {
+	if rb != xws.BinaryFrame {
 		t.Fatal("receved message is not binary frame:", rb)
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/websocket"
+	xws "golang.org/x/net/websocket"
 )
 
 const (
@@ -208,12 +208,12 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
 	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
-	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost/")
+	wsConfig, err := xws.NewConfig(wsURL, "http://localhost/")
 	if err != nil {
 		t.Fatal("cannot create connection config error:", err)
 	}
 	wsConfig.Header.Add(testRequestSessionHeader, "hogehoge")
-	conn, err := websocket.DialConfig(wsConfig)
+	conn, err := xws.DialConfig(wsConfig)
 	if err != nil {
 		t.Fatal("cannot connect error:", err)
 	}

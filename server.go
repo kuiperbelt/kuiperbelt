@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"golang.org/x/net/websocket"
+	xws "golang.org/x/net/websocket"
 )
 
 const (
@@ -24,7 +24,7 @@ const (
 
 var (
 	callbackClient = new(http.Client)
-	sendWsCodec    = websocket.Codec{
+	sendWsCodec    = xws.Codec{
 		Marshal:   messageMarshal,
 		Unmarshal: nil,
 	}
@@ -65,7 +65,7 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	server := websocket.Server{Handler: websocket.Handler(handler)}
+	server := xws.Server{Handler: xws.Handler(handler)}
 	server.ServeHTTP(w, r)
 }
 
@@ -150,7 +150,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	return resp, nil
 }
 
-func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *websocket.Conn), error) {
+func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *xws.Conn), error) {
 	defer resp.Body.Close()
 	key := resp.Header.Get(s.Config.SessionHeader)
 	var b bytes.Buffer
@@ -162,7 +162,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 		ContentType: resp.Header.Get("Content-Type"),
 		Session:     key,
 	}
-	return func(ws *websocket.Conn) {
+	return func(ws *xws.Conn) {
 		// register a new websocket sesssion.
 		session, err := s.NewWebSocketSession(key, ws)
 		if err != nil {
@@ -186,7 +186,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 	}, nil
 }
 
-func (s *WebSocketServer) NewWebSocketSession(key string, ws *websocket.Conn) (*WebSocketSession, error) {
+func (s *WebSocketServer) NewWebSocketSession(key string, ws *xws.Conn) (*WebSocketSession, error) {
 	send := make(chan Message, s.Config.SendQueueSize)
 	session := &WebSocketSession{
 		ws:       ws,
@@ -228,7 +228,7 @@ func (s *WebSocketServer) Shutdown(ctx context.Context) error {
 }
 
 type WebSocketSession struct {
-	ws       *websocket.Conn
+	ws       *xws.Conn
 	key      string
 	server   *WebSocketServer
 	send     chan Message
@@ -361,23 +361,23 @@ func messageMarshal(v interface{}) ([]byte, byte, error) {
 	}
 
 	// parce Content-Type
-	payloadType := byte(websocket.TextFrame)
+	payloadType := byte(xws.TextFrame)
 	contentType := message.ContentType
 	if i := strings.Index(contentType, ";"); i >= 0 {
 		contentType = contentType[0:i]
 	}
 	contentType = strings.TrimSpace(contentType)
 	if strings.EqualFold(contentType, "application/octet-stream") {
-		payloadType = websocket.BinaryFrame
+		payloadType = xws.BinaryFrame
 	}
 
 	switch payloadType {
-	case websocket.TextFrame:
+	case xws.TextFrame:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", string(message.Body)),
 		)
-	case websocket.BinaryFrame:
+	case xws.BinaryFrame:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", hex.EncodeToString(message.Body)),
