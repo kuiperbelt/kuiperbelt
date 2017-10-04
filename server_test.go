@@ -189,7 +189,7 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 	b.ReadFrom(resp.Body)
 
 	if b.String() != "fail authorization!" {
-		t.Error("callback message is not in response")
+		t.Errorf("callback message is not in response: %s", b.String())
 	}
 }
 

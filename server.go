@@ -30,6 +30,12 @@ var (
 	}
 )
 
+type errCallbackResponseNotOK int
+
+func (code errCallbackResponseNotOK) Error() string {
+	return http.StatusText(int(code))
+}
+
 type WebSocketServer struct {
 	Config Config
 	Stats  *Stats
@@ -53,6 +59,10 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
+		if resErr, ok := err.(errCallbackResponseNotOK); ok && resErr == http.StatusForbidden {
+			Log.Info("authorization failed")
+			return
+		}
 		Log.Error("connect error before upgrade",
 			zap.Error(err),
 		)
@@ -145,7 +155,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 		resp.Body.Close()
-		return nil, errors.New(http.StatusText(http.StatusInternalServerError))
+		return nil, errCallbackResponseNotOK(resp.StatusCode)
 	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
@@ -349,13 +359,22 @@ func (s *WebSocketSession) recvMessages() {
 	for {
 		_, r, err := s.ws.NextReader()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseNormalClosure,
+				websocket.CloseAbnormalClosure,
+			) {
 				Log.Error(
 					"unexpected error on read messages",
 					zap.Error(err),
 				)
+				break
 			}
-			break
+			Log.Info(
+				"connection is closed",
+				zap.Error(err),
+			)
+			return
 		}
 		buf := make([]byte, ioBufferSize)
 		_, err = io.CopyBuffer(ioutil.Discard, r, buf)
