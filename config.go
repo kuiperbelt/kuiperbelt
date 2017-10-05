@@ -1,17 +1,28 @@
 package kuiperbelt
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v1"
 )
 
 const (
-	DefaultPort = "9180"
+	DefaultPort         = "9180"
+	DefaultOriginPolicy = "none"
+)
+
+var (
+	validOriginPolicies = []string{
+		"same_origin",
+		"same_hostname",
+		"none",
+	}
 )
 
 type Config struct {
@@ -24,6 +35,7 @@ type Config struct {
 	ProxySetHeader  map[string]string `yaml:"proxy_set_header"`
 	SendTimeout     time.Duration     `yaml:"send_timeout"`
 	SendQueueSize   int               `yaml:"send_queue_size"`
+	OriginPolicy    string            `yaml:"origin_policy"`
 }
 
 type Callback struct {
@@ -71,6 +83,22 @@ func unmarshalConfig(b []byte) (*Config, error) {
 		} else {
 			config.Endpoint = net.JoinHostPort(hostname, config.Port)
 		}
+	}
+	if config.OriginPolicy == "" {
+		config.OriginPolicy = DefaultOriginPolicy
+	}
+	isValidOriginPolicy := false
+	for _, valid := range validOriginPolicies {
+		if config.OriginPolicy == valid {
+			isValidOriginPolicy = true
+			break
+		}
+	}
+	if !isValidOriginPolicy {
+		return nil, fmt.Errorf("origin_policy is invalid. availables: [%s] got: %s",
+			strings.Join(validOriginPolicies, ", "),
+			config.OriginPolicy,
+		)
 	}
 
 	return &config, nil

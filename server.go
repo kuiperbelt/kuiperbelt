@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,8 +24,8 @@ const (
 )
 
 var (
-	callbackClient = new(http.Client)
-	upgrader       = websocket.Upgrader{
+	callbackClient  = new(http.Client)
+	defaultUpgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
@@ -37,16 +38,46 @@ func (code errCallbackResponseNotOK) Error() string {
 }
 
 type WebSocketServer struct {
-	Config Config
-	Stats  *Stats
-	Pool   *SessionPool
+	Config   Config
+	Stats    *Stats
+	Pool     *SessionPool
+	upgrader websocket.Upgrader
 }
 
 func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
+	upgrader := defaultUpgrader
+	switch c.OriginPolicy {
+	case "same_origin": // gorilla/websocket default checker is checking same origin.
+	case "same_hostname":
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			host := r.Host
+			hostname, _, err := net.SplitHostPort(host)
+			if err != nil {
+				Log.Error("cannot split host by request",
+					zap.Error(err),
+				)
+				return false
+			}
+			origin := r.Header.Get("Origin")
+			originURL, err := url.Parse(origin)
+			if err != nil {
+				Log.Error("cannot parse origin by request",
+					zap.Error(err),
+				)
+				return false
+			}
+			return hostname == originURL.Hostname()
+		}
+	case "none":
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			return true
+		}
+	}
 	return &WebSocketServer{
-		Config: c,
-		Stats:  s,
-		Pool:   p,
+		Config:   c,
+		Stats:    s,
+		Pool:     p,
+		upgrader: upgrader,
 	}
 }
 
@@ -75,7 +106,7 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		Log.Error("cannot upgrade",
 			zap.Error(err),
