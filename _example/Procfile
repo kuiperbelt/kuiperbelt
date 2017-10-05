@@ -1,0 +1,2 @@
+ekbo: ekbo -config=config.yml
+app: carton exec plackup app.psgi --port=12346

@@ -4,3 +4,4 @@ requires "Redis::Fast";
 requires "Furl";
 requires "Path::Tiny";
 requires "Starlet";
+requires "Proclet";
