@@ -452,6 +452,10 @@ func (s *WebSocketSession) setIdleTimeout() error {
 		return nil
 	}
 	deadline := time.Now().Add(it)
+	Log.Debug("set idle timeout",
+		zap.String("session", s.Key()),
+		zap.Time("deadline", deadline),
+	)
 	return s.ws.UnderlyingConn().SetDeadline(deadline)
 }
 
