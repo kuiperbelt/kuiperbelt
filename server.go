@@ -7,14 +7,15 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -23,24 +24,60 @@ const (
 )
 
 var (
-	callbackClient = new(http.Client)
-	sendWsCodec    = websocket.Codec{
-		Marshal:   messageMarshal,
-		Unmarshal: nil,
+	callbackClient  = new(http.Client)
+	defaultUpgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
 )
 
+type errCallbackResponseNotOK int
+
+func (code errCallbackResponseNotOK) Error() string {
+	return http.StatusText(int(code))
+}
+
 type WebSocketServer struct {
-	Config Config
-	Stats  *Stats
-	Pool   *SessionPool
+	Config   Config
+	Stats    *Stats
+	Pool     *SessionPool
+	upgrader websocket.Upgrader
 }
 
 func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
+	upgrader := defaultUpgrader
+	switch c.OriginPolicy {
+	case "same_origin": // gorilla/websocket default checker is checking same origin.
+	case "same_hostname":
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			host := r.Host
+			hostname, _, err := net.SplitHostPort(host)
+			if err != nil {
+				Log.Error("cannot split host by request",
+					zap.Error(err),
+				)
+				return false
+			}
+			origin := r.Header.Get("Origin")
+			originURL, err := url.Parse(origin)
+			if err != nil {
+				Log.Error("cannot parse origin by request",
+					zap.Error(err),
+				)
+				return false
+			}
+			return hostname == originURL.Hostname()
+		}
+	case "none":
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			return true
+		}
+	}
 	return &WebSocketServer{
-		Config: c,
-		Stats:  s,
-		Pool:   p,
+		Config:   c,
+		Stats:    s,
+		Pool:     p,
+		upgrader: upgrader,
 	}
 }
 
@@ -53,6 +90,10 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := s.ConnectCallbackHandler(w, r)
 	if err != nil {
+		if resErr, ok := err.(errCallbackResponseNotOK); ok && resErr == http.StatusForbidden {
+			Log.Info("authorization failed")
+			return
+		}
 		Log.Error("connect error before upgrade",
 			zap.Error(err),
 		)
@@ -60,13 +101,20 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler, err := s.NewWebSocketHandler(resp)
+	wsHandler, err := s.NewWebSocketHandler(resp)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-	server := websocket.Server{Handler: websocket.Handler(handler)}
-	server.ServeHTTP(w, r)
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		Log.Error("cannot upgrade",
+			zap.Error(err),
+		)
+		s.Stats.ConnectErrorEvent()
+		return
+	}
+	wsHandler(conn)
 }
 
 func (s *WebSocketServer) Register() {
@@ -138,7 +186,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 		w.WriteHeader(resp.StatusCode)
 		io.Copy(w, resp.Body)
 		resp.Body.Close()
-		return nil, errors.New(http.StatusText(http.StatusInternalServerError))
+		return nil, errCallbackResponseNotOK(resp.StatusCode)
 	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
@@ -176,7 +224,7 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 		// send the first message.
 		if len(message.Body) > 0 {
 			s.Stats.MessageEvent()
-			if err := sendWsCodec.Send(ws, message); err != nil {
+			if err := session.writeMessage(message); err != nil {
 				s.Stats.MessageErrorEvent()
 				return
 			}
@@ -322,7 +370,7 @@ func (s *WebSocketSession) sendMessages() {
 	for {
 		select {
 		case msg := <-s.send:
-			if err := sendWsCodec.Send(s.ws, msg); err != nil {
+			if err := s.writeMessage(msg); err != nil {
 				s.server.Stats.MessageErrorEvent()
 				s.Close()
 				return
@@ -339,50 +387,82 @@ func (s *WebSocketSession) sendMessages() {
 
 func (s *WebSocketSession) recvMessages() {
 	defer s.Close()
-	buf := make([]byte, ioBufferSize)
-	_, err := io.CopyBuffer(ioutil.Discard, s.ws, buf)
-	if err == nil {
-		return
+	for {
+		_, r, err := s.ws.NextReader()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err,
+				websocket.CloseGoingAway,
+				websocket.CloseNormalClosure,
+				websocket.CloseAbnormalClosure,
+			) {
+				Log.Error(
+					"unexpected error on read messages",
+					zap.Error(err),
+				)
+				break
+			}
+			Log.Info(
+				"connection is closed",
+				zap.Error(err),
+			)
+			return
+		}
+		buf := make([]byte, ioBufferSize)
+		_, err = io.CopyBuffer(ioutil.Discard, r, buf)
+		if err != nil {
+			break
+		}
 	}
+
 	// ignore closed session error
 	if atomic.LoadUint32(&s.closed) != 0 {
 		return
 	}
 
-	Log.Error("watch close frame error",
-		zap.Error(err),
-	)
+	Log.Error("watch close frame error")
 }
 
-func messageMarshal(v interface{}) ([]byte, byte, error) {
+func (s *WebSocketSession) writeMessage(message Message) error {
+	bs, messageType, err := messageMarshal(message)
+	if err != nil {
+		return err
+	}
+	err = s.ws.WriteMessage(messageType, bs)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func messageMarshal(v interface{}) ([]byte, int, error) {
 	message, ok := v.(Message)
 	if !ok {
 		return nil, 0x0, errors.New("kuiperbelt: value is not kuiperbelt.Message")
 	}
 
 	// parce Content-Type
-	payloadType := byte(websocket.TextFrame)
+	messageType := websocket.TextMessage
 	contentType := message.ContentType
 	if i := strings.Index(contentType, ";"); i >= 0 {
 		contentType = contentType[0:i]
 	}
 	contentType = strings.TrimSpace(contentType)
 	if strings.EqualFold(contentType, "application/octet-stream") {
-		payloadType = websocket.BinaryFrame
+		messageType = websocket.BinaryMessage
 	}
 
-	switch payloadType {
-	case websocket.TextFrame:
+	switch messageType {
+	case websocket.TextMessage:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", string(message.Body)),
 		)
-	case websocket.BinaryFrame:
+	case websocket.BinaryMessage:
 		Log.Debug("write messege to session",
 			zap.String("session", message.Session),
 			zap.String("message", hex.EncodeToString(message.Body)),
 		)
 	}
 
-	return message.Body, payloadType, nil
+	return message.Body, messageType, nil
 }

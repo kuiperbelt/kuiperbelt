@@ -3,7 +3,6 @@ package kuiperbelt
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -189,7 +188,7 @@ func TestWebSocketServer__Handler__FailAuthorized(t *testing.T) {
 	b.ReadFrom(resp.Body)
 
 	if b.String() != "fail authorization!" {
-		t.Error("callback message is not in response")
+		t.Errorf("callback message is not in response: %s", b.String())
 	}
 }
 
@@ -207,25 +206,20 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 
 	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
 
+	dialer := websocket.Dialer{}
 	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
-	wsConfig, err := websocket.NewConfig(wsURL, "http://localhost/")
-	if err != nil {
-		t.Fatal("cannot create connection config error:", err)
-	}
-	wsConfig.Header.Add(testRequestSessionHeader, "hogehoge")
-	conn, err := websocket.DialConfig(wsConfig)
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"hogehoge"}})
 	if err != nil {
 		t.Fatal("cannot connect error:", err)
 	}
 
-	io.CopyN(ioutil.Discard, conn, int64(len([]byte("hello"))))
-
+	conn.ReadMessage() // pull and drop initial message
 	_, err = pool.Get("hogehoge")
 	if err != nil {
 		t.Fatal("cannot get session error:", err)
 	}
 
-	_, err = io.WriteString(conn, "barbar")
+	err = conn.WriteMessage(websocket.TextMessage, []byte("barbar"))
 	if err != nil {
 		t.Fatal("cannot write to connection error:", err)
 	}
