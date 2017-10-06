@@ -36,6 +36,7 @@ type Config struct {
 	SendTimeout     time.Duration     `yaml:"send_timeout"`
 	SendQueueSize   int               `yaml:"send_queue_size"`
 	OriginPolicy    string            `yaml:"origin_policy"`
+	IdleTimeout     time.Duration     `yaml:"idle_timeout"`
 }
 
 type Callback struct {

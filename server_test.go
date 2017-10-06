@@ -2,6 +2,7 @@ package kuiperbelt
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -246,4 +247,69 @@ func TestWebSocketServer__Handler__CloseByClient(t *testing.T) {
 		t.Error("not receive close callback")
 	}
 
+}
+
+func TestWebSocketSession__IdleTimeout(t *testing.T) {
+	closeHandlerEvent := make(chan struct{})
+
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tccConnect := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tccClose := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callbackServer.CloseHandler(w, r)
+			closeHandlerEvent <- struct{}{}
+		}),
+	)
+
+	c := TestConfig
+	c.IdleTimeout = time.Second * 2
+	c.Callback.Connect = tccConnect.URL
+	c.Callback.Close = tccClose.URL
+
+	var pool SessionPool
+	server := NewWebSocketServer(c, NewStats(), &pool)
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	dialer := websocket.Dialer{}
+	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"hogehoge"}})
+	if err != nil {
+		t.Fatal("cannot connect error:", err)
+	}
+	receivedPongCh := make(chan struct{}, 3)
+	conn.SetPongHandler(func(msg string) error {
+		receivedPongCh <- struct{}{}
+		if msg != "hello" {
+			t.Errorf("pong response is invalid: got: %s, expected: hello", msg)
+			return fmt.Errorf("pong response is invalid: got: %s, expected: hello", msg)
+		}
+		return nil
+	})
+
+	go func() {
+		var err error
+		for err == nil {
+			_, _, err = conn.ReadMessage() // drop messages
+		}
+	}()
+
+	// Must not reach connection timeout when 1sec + ping(reset deadline) + 1sec
+	time.Sleep(time.Second * 1)
+	err = conn.WriteControl(websocket.PingMessage, []byte("hello"), time.Now().Add(time.Second))
+	if err != nil {
+		t.Errorf("fail send ping error: %s", err)
+	}
+	time.Sleep(time.Second * 1)
+	if len(receivedPongCh) != 1 {
+		t.Errorf("not receive pong: %d", len(receivedPongCh))
+	}
+	if len(closeHandlerEvent) != 0 {
+		t.Fatal("rearch connection timeout with ping")
+	}
+
+	select {
+	case <-closeHandlerEvent:
+	case <-time.After(time.Millisecond * 1500):
+		t.Error("connection timeout is not working")
+	}
 }

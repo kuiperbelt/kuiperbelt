@@ -221,6 +221,17 @@ func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *web
 		s.Pool.Add(session)
 		defer s.Pool.Delete(session.Key())
 
+		defaultPingHandler := ws.PingHandler()
+		// Whern receive Ping, stretch idle deadline and do default ping handler
+		ws.SetPingHandler(func(message string) error {
+			session.setIdleTimeout()
+			return defaultPingHandler(message)
+		})
+		ws.SetPongHandler(func(message string) error {
+			session.setIdleTimeout()
+			return nil
+		})
+
 		// send the first message.
 		if len(message.Body) > 0 {
 			s.Stats.MessageEvent()
@@ -368,6 +379,7 @@ func (s *WebSocketSession) sendCloseCallback() {
 
 func (s *WebSocketSession) sendMessages() {
 	for {
+		s.setIdleTimeout()
 		select {
 		case msg := <-s.send:
 			if err := s.writeMessage(msg); err != nil {
@@ -432,6 +444,19 @@ func (s *WebSocketSession) writeMessage(message Message) error {
 		return err
 	}
 	return nil
+}
+
+func (s *WebSocketSession) setIdleTimeout() error {
+	it := s.server.Config.IdleTimeout
+	if it == 0 {
+		return nil
+	}
+	deadline := time.Now().Add(it)
+	Log.Debug("set idle timeout",
+		zap.String("session", s.Key()),
+		zap.Time("deadline", deadline),
+	)
+	return s.ws.UnderlyingConn().SetDeadline(deadline)
 }
 
 func messageMarshal(v interface{}) ([]byte, int, error) {
