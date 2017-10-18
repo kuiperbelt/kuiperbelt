@@ -29,6 +29,7 @@ callback:
 proxy_set_header:
   "X-Foo": "Foo"  # set to callback request header
   "X-Bar": ""     # remove from callback request header
+suppress_access_log: true
 ```
 
 ### Launch
