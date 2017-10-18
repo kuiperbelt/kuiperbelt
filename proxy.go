@@ -45,8 +45,12 @@ func (p *Proxy) Register() {
 	mux.HandleFunc("/send", p.SendHandlerFunc)
 	mux.HandleFunc("/close", p.CloseHandlerFunc)
 	mux.HandleFunc("/ping", p.PingHandlerFunc)
-	l := NewLoggingHandler(mux)
-	http.Handle("/", l)
+	if p.Config.SuppressAccessLog {
+		http.Handle("/", mux)
+	} else {
+		l := NewLoggingHandler(mux)
+		http.Handle("/", l)
+	}
 }
 
 func (p *Proxy) handlerPreHook(w http.ResponseWriter, r *http.Request) ([]Session, error) {

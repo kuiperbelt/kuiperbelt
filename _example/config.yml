@@ -2,3 +2,4 @@ port: 12345
 callback:
   connect: "http://localhost:12346/connect"
   close: "http://localhost:12346/close"
+# suppress_access_log: true
