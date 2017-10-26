@@ -75,8 +75,8 @@ func (s *Stats) Dump(w io.Writer) error {
 
 func (s *Stats) DumpText(w io.Writer) error {
 	now := time.Now().Unix()
-	var b [512]byte
-	buf := bytes.NewBuffer(b[:])
+	buf := new(bytes.Buffer)
+	buf.Grow(512)
 	fmt.Fprintf(buf, "kuiperbelt.connections\t%d\t%d\n", s.Connections(), now)
 	fmt.Fprintf(buf, "kuiperbelt.total_connections\t%d\t%d\n", s.TotalConnections(), now)
 	fmt.Fprintf(buf, "kuiperbelt.total_messages\t%d\t%d\n", s.TotalMessages(), now)
