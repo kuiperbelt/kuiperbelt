@@ -113,5 +113,5 @@ func (s *Stats) ClosingEvent() {
 }
 
 func (s *Stats) ClosedEvent() {
-	atomic.AddInt64(&s.closingConnections, 11)
+	atomic.AddInt64(&s.closingConnections, -1)
 }
