@@ -75,14 +75,14 @@ func (s *Stats) Dump(w io.Writer) error {
 
 func (s *Stats) DumpText(w io.Writer) error {
 	now := time.Now().Unix()
-	var b [512]byte
-	buf := bytes.NewBuffer(b[:])
-	fmt.Fprintf(buf, "kuiperbelt.connections\t%d\t%d\n", s.Connections(), now)
-	fmt.Fprintf(buf, "kuiperbelt.total_connections\t%d\t%d\n", s.TotalConnections(), now)
-	fmt.Fprintf(buf, "kuiperbelt.total_messages\t%d\t%d\n", s.TotalMessages(), now)
-	fmt.Fprintf(buf, "kuiperbelt.connect_errors\t%d\t%d\n", s.ConnectErrors(), now)
-	fmt.Fprintf(buf, "kuiperbelt.message_errors\t%d\t%d\n", s.MessageErrors(), now)
-	fmt.Fprintf(buf, "kuiperbelt.closing_connections\t%d\t%d\n", s.ClosingConnections(), now)
+	buf := new(bytes.Buffer)
+	buf.Grow(512)
+	fmt.Fprintf(buf, "kuiperbelt.conn.current\t%d\t%d\n", s.Connections(), now)
+	fmt.Fprintf(buf, "kuiperbelt.conn.total\t%d\t%d\n", s.TotalConnections(), now)
+	fmt.Fprintf(buf, "kuiperbelt.conn.errors\t%d\t%d\n", s.ConnectErrors(), now)
+	fmt.Fprintf(buf, "kuiperbelt.conn.closing\t%d\t%d\n", s.ClosingConnections(), now)
+	fmt.Fprintf(buf, "kuiperbelt.messages.total\t%d\t%d\n", s.TotalMessages(), now)
+	fmt.Fprintf(buf, "kuiperbelt.messages.errors\t%d\t%d\n", s.MessageErrors(), now)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -113,5 +113,5 @@ func (s *Stats) ClosingEvent() {
 }
 
 func (s *Stats) ClosedEvent() {
-	atomic.AddInt64(&s.closingConnections, 11)
+	atomic.AddInt64(&s.closingConnections, -1)
 }
