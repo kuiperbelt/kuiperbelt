@@ -19,7 +19,7 @@ func main() {
 	flag.StringVar(&configFilename, "config", "config.yml", "config path")
 	flag.StringVar(&logLevel, "log-level", "info", "log level")
 	flag.StringVar(&port, "port", "", "launch port")
-	flag.StringVar(&gopsAddr, "gops-addr", "localhost:9181", "gops address")
+	flag.StringVar(&gopsAddr, "gops-addr", "", "gops address")
 	flag.StringVar(&sock, "sock", "", "unix domain socket path")
 	flag.BoolVar(&showVersion, "version", false, "show version")
 	flag.Parse()
