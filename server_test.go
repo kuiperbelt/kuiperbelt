@@ -97,6 +97,16 @@ func (s *testSuccessConnectCallbackServer) CloseHandler(w http.ResponseWriter, r
 	io.WriteString(w, "")
 }
 
+func (s *testSuccessConnectCallbackServer) SlowHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.mu.Unlock()
+	time.Sleep(10 * time.Second)
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, "slow response")
+}
+
 func newTestWebSocketRequest(url string) (*http.Request, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -311,5 +321,34 @@ func TestWebSocketSession__IdleTimeout(t *testing.T) {
 	case <-closeHandlerEvent:
 	case <-time.After(time.Millisecond * 1500):
 		t.Error("connection timeout is not working")
+	}
+}
+
+func TestWebSocketServer__Handler__SlowCallback(t *testing.T) {
+	var pool SessionPool
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SlowHandler))
+
+	c := TestConfig
+	c.Callback.Connect = tcc.URL
+
+	server := NewWebSocketServer(c, NewStats(), &pool)
+
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	req, err := newTestWebSocketRequest(tc.URL)
+	if err != nil {
+		t.Fatal("cannot create request error:", err)
+	}
+
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("to server upgrade request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Error("unexpected status code:", resp.StatusCode)
 	}
 }

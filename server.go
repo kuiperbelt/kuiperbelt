@@ -154,6 +154,13 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return nil, err
 	}
+	// set callback timeout
+	if timeout := s.Config.Callback.Timeout; timeout != 0 {
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+		callbackRequest = callbackRequest.WithContext(ctx)
+	}
+
 	// copy all headers except "Connection", "Upgrade" and "Sec-Websocket*"
 	for n, values := range r.Header {
 		n := strings.ToLower(n)
