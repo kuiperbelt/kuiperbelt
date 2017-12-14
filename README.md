@@ -26,6 +26,7 @@ callback:
   # When your application returning "HTTP/1.1 OK 200" in this callback, a connection upgrade to WebSocket.
   # However your returning other than "200" ("404", "403" and "500"...), a connection is disconnect.
   connect: "http://localhost:12346/connect"
+  timeout: 10s    # callback response timeout
 proxy_set_header:
   "X-Foo": "Foo"  # set to callback request header
   "X-Bar": ""     # remove from callback request header
