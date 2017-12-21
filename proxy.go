@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"sync"
 )
 
@@ -42,9 +43,10 @@ func NewProxy(c Config, s *Stats, p *SessionPool) *Proxy {
 
 func (p *Proxy) Register() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/send", p.SendHandlerFunc)
-	mux.HandleFunc("/close", p.CloseHandlerFunc)
-	mux.HandleFunc("/ping", p.PingHandlerFunc)
+	prefix := p.Config.PathPrefix
+	mux.HandleFunc(path.Join(prefix, "/send"), p.SendHandlerFunc)
+	mux.HandleFunc(path.Join(prefix, "/close"), p.CloseHandlerFunc)
+	mux.HandleFunc(path.Join(prefix, "/ping"), p.PingHandlerFunc)
 	if p.Config.SuppressAccessLog {
 		http.Handle("/", mux)
 	} else {

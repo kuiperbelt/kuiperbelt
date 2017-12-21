@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -121,8 +122,9 @@ func (s *WebSocketServer) Register() {
 	callbackClient.Transport = &http.Transport{
 		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
 	}
-	http.HandleFunc("/connect", s.Handler)
-	http.HandleFunc("/stats", s.StatsHandler)
+	prefix := s.Config.PathPrefix
+	http.HandleFunc(path.Join(prefix, "/connect"), s.Handler)
+	http.HandleFunc(path.Join(prefix, "/stats"), s.StatsHandler)
 }
 
 func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {
