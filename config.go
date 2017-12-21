@@ -38,6 +38,7 @@ type Config struct {
 	OriginPolicy      string            `yaml:"origin_policy"`
 	IdleTimeout       time.Duration     `yaml:"idle_timeout"`
 	SuppressAccessLog bool              `yaml:"suppress_access_log"`
+	PathPrefix        string            `yaml:"path_prefix"`
 }
 
 type Callback struct {
