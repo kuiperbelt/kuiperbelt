@@ -2,14 +2,13 @@ package kuiperbelt
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v1"
+	"github.com/kayac/go-config"
 )
 
 const (
@@ -47,52 +46,44 @@ type Callback struct {
 }
 
 func NewConfig(filename string) (*Config, error) {
-	f, err := os.Open(filename)
+	var c Config
+	err := config.LoadWithEnv(&c, filename)
 	if err != nil {
 		return nil, err
 	}
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return unmarshalConfig(b)
+	return tryBindDefaultToConfig(&c)
 }
 
-func unmarshalConfig(b []byte) (*Config, error) {
-	var config Config
-	err := yaml.Unmarshal(b, &config)
-	if err != nil {
-		return nil, err
+func tryBindDefaultToConfig(c *Config) (*Config, error) {
+	if c.SessionHeader == "" {
+		c.SessionHeader = "X-Kuiperbelt-Session"
 	}
-	if config.SessionHeader == "" {
-		config.SessionHeader = "X-Kuiperbelt-Session"
-	}
-	if config.Endpoint == "" {
+	if c.Endpoint == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
 			return nil, err
 		}
 
-		if config.Port == "" {
-			config.Port = DefaultPort
+		if c.Port == "" {
+			c.Port = DefaultPort
 		}
-		p, err := strconv.Atoi(config.Port)
+		p, err := strconv.Atoi(c.Port)
 		if err != nil {
 			return nil, err
 		}
 
 		if p <= 1023 {
-			config.Endpoint = hostname
+			c.Endpoint = hostname
 		} else {
-			config.Endpoint = net.JoinHostPort(hostname, config.Port)
+			c.Endpoint = net.JoinHostPort(hostname, c.Port)
 		}
 	}
-	if config.OriginPolicy == "" {
-		config.OriginPolicy = DefaultOriginPolicy
+	if c.OriginPolicy == "" {
+		c.OriginPolicy = DefaultOriginPolicy
 	}
 	isValidOriginPolicy := false
 	for _, valid := range validOriginPolicies {
-		if config.OriginPolicy == valid {
+		if c.OriginPolicy == valid {
 			isValidOriginPolicy = true
 			break
 		}
@@ -100,9 +91,9 @@ func unmarshalConfig(b []byte) (*Config, error) {
 	if !isValidOriginPolicy {
 		return nil, fmt.Errorf("origin_policy is invalid. availables: [%s] got: %s",
 			strings.Join(validOriginPolicies, ", "),
-			config.OriginPolicy,
+			c.OriginPolicy,
 		)
 	}
 
-	return &config, nil
+	return c, nil
 }
