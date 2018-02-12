@@ -180,6 +180,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	}
 
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
+	callbackRequest.Close = s.shouldCloseCallbackRequest()
 
 	// set callback timeout
 	if timeout := s.Config.Callback.Timeout; timeout != 0 {
@@ -192,7 +193,6 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 		http.Error(w, http.StatusText(http.StatusBadGateway), http.StatusBadGateway)
 		return nil, err
 	}
-	callbackRequest.Close = s.shouldCloseCallbackRequest()
 
 	if resp.StatusCode != http.StatusOK {
 		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
