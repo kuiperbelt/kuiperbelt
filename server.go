@@ -24,9 +24,9 @@ const (
 )
 
 var (
-	callbackClient        = new(http.Client)
-	callbackCloseInterval = 10 * time.Second
-	defaultUpgrader       = websocket.Upgrader{
+	callbackClient          = new(http.Client)
+	callbackPersistentLimit = 10 * time.Second
+	defaultUpgrader         = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
@@ -80,7 +80,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 		Stats:    s,
 		Pool:     p,
 		upgrader: upgrader,
-		timer:    time.NewTimer(callbackCloseInterval),
+		timer:    time.NewTimer(callbackPersistentLimit),
 	}
 }
 
@@ -123,7 +123,7 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 func (s *WebSocketServer) Register() {
 	callbackClient.Transport = &http.Transport{
 		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
-		IdleConnTimeout:     callbackCloseInterval,
+		IdleConnTimeout:     callbackPersistentLimit,
 	}
 	http.HandleFunc("/connect", s.Handler)
 	http.HandleFunc("/stats", s.StatsHandler)
@@ -180,7 +180,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	}
 
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
-	callbackRequest.Close = s.shouldCloseCallbackRequest()
+	callbackRequest.Close = s.shouldDisconnectCallbackRequest()
 
 	// set callback timeout
 	if timeout := s.Config.Callback.Timeout; timeout != 0 {
@@ -299,11 +299,11 @@ func (s *WebSocketServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s *WebSocketServer) shouldCloseCallbackRequest() bool {
+func (s *WebSocketServer) shouldDisconnectCallbackRequest() bool {
 	select {
 	case <-s.timer.C:
-		Log.Debug("shouldCloseCallbackRequest")
-		s.timer.Reset(callbackCloseInterval)
+		Log.Debug("shouldDisconnectCallbackRequest")
+		s.timer.Reset(callbackPersistentLimit)
 		return true
 	default:
 		return false
@@ -369,7 +369,7 @@ func (s *WebSocketSession) sendCloseCallback() {
 			req.Header.Set(name, value)
 		}
 	}
-	req.Close = s.server.shouldCloseCallbackRequest()
+	req.Close = s.server.shouldDisconnectCallbackRequest()
 	resp, err := callbackClient.Do(req)
 
 	if err != nil {
