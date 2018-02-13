@@ -1,0 +1,19 @@
+apiVersion: apps/v1beta2
+kind: Deployment
+metadata:
+  name: kuiperbelt
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ekbo
+  template:
+    metadata:
+      labels:
+        app: ekbo
+    spec:
+      containers:
+      - name: kuiperbelt
+        image: kuiperbelt:v1.2.4
+        ports:
+        - containerPort: 9180

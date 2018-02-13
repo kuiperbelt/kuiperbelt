@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kuiperbelt-sample
+spec:
+  containers:
+  - name: kuiperbelt
+    image: "kuiperbelt:v1.2.4"
+    imagePullPolicy: IfNotPresent
+    ports:
+    - containerPort: 9180

@@ -3,7 +3,13 @@ VERSION := $(shell git describe --tags)
 cmd/ekbo/ekbo: *.go cmd/ekbo/main.go
 	cd cmd/ekbo && go build -tags="$(TAGS)" -ldflags="-X github.com/mackee/kuiperbelt.Version=$(VERSION)"
 
-.PHONY: clean install get-deps test packages
+.PHONY: clean install get-deps test packages static-build docker-image
+
+static-build:
+	cd cmd/ekbo && CGO_ENABLED=0 go build -tags="$(TAGS)" -a -installsuffix cgo -ldflags="-X github.com/mackee/kuiperbelt.Version=$(VERSION)"
+
+docker-image:
+	docker build -t kuiperbelt .
 
 test:
 	go test -v -race
