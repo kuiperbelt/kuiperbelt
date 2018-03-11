@@ -22,6 +22,5 @@ deploy:
   on:
     repo: mackee/kuiperbelt
     all_branches: true
-    target: true
-    go: 1.10.x
-    condition: "$TRAVIS_TAG =~ ^v[0-9].*$"
+    tags: true
+    go: '1.10'
