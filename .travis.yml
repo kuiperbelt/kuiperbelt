@@ -7,7 +7,12 @@ go:
   - 1.10.x
   - tip
 
-install:
+env:
+  - PATH=$GOPATH/bin:$PATH
+
+before_install:
   - go get -u github.com/golang/dep
   - make get-deps
+
+install:
   - make test
