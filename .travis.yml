@@ -3,8 +3,12 @@ sudo: false
 
 go:
   - 1.8.x
+  - 1.9.x
+  - 1.10.x
   - tip
 
 install:
+  - git submodule update --recursive
+  - go get -u github.com/golang/dep
   - make get-deps
   - make test
