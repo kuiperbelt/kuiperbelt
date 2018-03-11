@@ -12,7 +12,7 @@ script:
 - make test
 before_deploy:
 - go get -u github.com/Songmu/goxz/cmd/goxz
-- make packages
+- make package
 deploy:
   provider: releases
   api_key:
@@ -23,3 +23,5 @@ deploy:
     repo: mackee/kuiperbelt
     all_branches: true
     target: true
+    go: 1.10.x
+    condition: "$TRAVIS_TAG =~ ^v[0-9].*$"
