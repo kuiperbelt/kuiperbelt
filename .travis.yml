@@ -18,7 +18,7 @@ deploy:
   api_key:
     secure: ESay6OGTqESpXntJtTAX4PvSh1geRdWYsOVzu0+OJMmrPnjFiYt4pIt0YocYAmkLYt1otvu3z/wuSoMsVwpAZvCaekuXSHrz/JxsyqwB3yPEWEyjX8h4Z1CDgZzEoVUyrE5p04y2xBKNbmqsDv5ZTPuSRCplrxEs0uiw8ioMrcA=
   file_glob: true
-  file: _artifacts/*.zip
+  file: '_artifacts/*.{tar.gz,zip}'
   on:
     repo: mackee/kuiperbelt
     all_branches: true
