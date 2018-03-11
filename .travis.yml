@@ -8,7 +8,6 @@ go:
   - tip
 
 install:
-  - git submodule update --recursive
   - go get -u github.com/golang/dep
   - make get-deps
   - make test
