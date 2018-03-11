@@ -1,3 +1,0 @@
-[submodule "_jetpack"]
-	path = _jetpack
-	url = git@github.com:mackee/go-mk-jetpack
