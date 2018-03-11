@@ -15,6 +15,7 @@ before_deploy:
 - make package
 deploy:
   provider: releases
+  skip_cleanup: true
   api_key:
     secure: ESay6OGTqESpXntJtTAX4PvSh1geRdWYsOVzu0+OJMmrPnjFiYt4pIt0YocYAmkLYt1otvu3z/wuSoMsVwpAZvCaekuXSHrz/JxsyqwB3yPEWEyjX8h4Z1CDgZzEoVUyrE5p04y2xBKNbmqsDv5ZTPuSRCplrxEs0uiw8ioMrcA=
   file_glob: true
