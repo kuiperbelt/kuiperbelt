@@ -1,15 +1,25 @@
 language: go
 sudo: false
-
 go:
-  - 1.8.x
-  - 1.9.x
-  - 1.10.x
-  - tip
-
-before_install:
-  - go get -u github.com/golang/dep/cmd/dep
-  - make get-deps
-
+- 1.8.x
+- 1.9.x
+- 1.10.x
+- tip
 install:
-  - make test
+- go get -u github.com/golang/dep/cmd/dep
+- make get-deps
+script:
+- make test
+before_deploy:
+- go get -u github.com/Songmu/goxz/cmd/goxz
+- make packages
+deploy:
+  provider: releases
+  api_key:
+    secure: ESay6OGTqESpXntJtTAX4PvSh1geRdWYsOVzu0+OJMmrPnjFiYt4pIt0YocYAmkLYt1otvu3z/wuSoMsVwpAZvCaekuXSHrz/JxsyqwB3yPEWEyjX8h4Z1CDgZzEoVUyrE5p04y2xBKNbmqsDv5ZTPuSRCplrxEs0uiw8ioMrcA=
+  file_glob: true
+  file: _artifacts/*.zip
+  on:
+    repo: mackee/kuiperbelt
+    all_branches: true
+    target: true
