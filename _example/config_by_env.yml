@@ -8,6 +8,7 @@ session_header: {{ env "EKBO_SESSION_HEADER_NAME" "X-Kuiperbelt-Session" }}
 sock: {{ env "EKBO_UNIX_DOMAIN_SOCKET_FILENAME" "" }}
 endpoint: {{ env "EKBO_SELF_ENDPOINT_URL" "" }}
 strict_broadcast: {{ env "EKBO_STRICT_BROADCAST_MODE_SWITCH" "false" }}
+proxy_set_header: {{ env "EKBO_PROXY_SET_HEADER" "{}" }}
 send_timeout: {{ env "EKBO_SEND_TIMEOUT" "0" }}
 send_queue_size: {{ env "EKBO_SEND_QUEUE_SIZE" "0" }}
 origin_policy: {{ env "EKBO_ORIGIN_POLICY" "none" }}
