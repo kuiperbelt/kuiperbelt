@@ -29,7 +29,7 @@ func main() {
 		return
 	}
 
-	if err := agent.Listen(&agent.Options{Addr: gopsAddr}); err != nil {
+	if err := agent.Listen(agent.Options{Addr: gopsAddr}); err != nil {
 		log.Fatal(err)
 	}
 
