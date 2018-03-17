@@ -14,14 +14,20 @@
     "internal",
     "signal"
   ]
-  revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
-  version = "v0.3.1"
+  revision = "0e2aa5d22efec1603f7ded7097c500e9a36a13b3"
+  version = "v0.3.3"
 
 [[projects]]
   name = "github.com/gorilla/websocket"
   packages = ["."]
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
   version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/kardianos/osext"
+  packages = ["."]
+  revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
 
 [[projects]]
   name = "github.com/kayac/go-config"
@@ -48,7 +54,6 @@
   version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
   name = "go.uber.org/zap"
   packages = [
     ".",
@@ -58,17 +63,18 @@
     "internal/exit",
     "zapcore"
   ]
-  revision = "dadca013650a921313c28fa51e4e89e84e3e252d"
+  revision = "35aad584952c3e7020db7b839f6b102de6271f89"
+  version = "v1.7.1"
 
 [[projects]]
-  branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "287cf08546ab5e7e37d55a84f7ed3fd1db036de5"
+  revision = "7f97868eec74b32b0982dd158a51a446d1da7eb5"
+  version = "v2.1.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5983c49b04d40da83d307b2863202f5a93148a1dfa0ded00f62832aa82bbcc1f"
+  inputs-digest = "abd9869985888e3bb1e9c312a0e68a918dfc67ae3518eab300d4c4da52546f0f"
   solver-name = "gps-cdcl"
   solver-version = 1
