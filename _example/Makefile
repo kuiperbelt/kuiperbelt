@@ -1,10 +1,10 @@
-.PHONY: get-deps up all
+.PHONY: up down open
 
-all: up
+up:
+	docker-compose up -d --build
 
-get-deps:
-	cpanm Carton
-	carton install
+down:
+	docker-compose down
 
-up: get-deps
-	carton exec proclet start
+open:
+	open http://localhost:12346/

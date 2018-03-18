@@ -2,16 +2,44 @@
 
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
+  version = "v0.3.0"
+
+[[projects]]
   name = "github.com/google/gops"
-  packages = ["agent","internal","signal"]
-  revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
-  version = "v0.3.1"
+  packages = [
+    "agent",
+    "internal",
+    "signal"
+  ]
+  revision = "0e2aa5d22efec1603f7ded7097c500e9a36a13b3"
+  version = "v0.3.3"
 
 [[projects]]
   name = "github.com/gorilla/websocket"
   packages = ["."]
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
   version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/kardianos/osext"
+  packages = ["."]
+  revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
+
+[[projects]]
+  name = "github.com/kayac/go-config"
+  packages = ["."]
+  revision = "762bc25448755c6ccfe0265ed3013c9d507569c5"
+  version = "v0.0.1"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   name = "go.uber.org/atomic"
@@ -26,20 +54,27 @@
   version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
   name = "go.uber.org/zap"
-  packages = [".","buffer","internal/bufferpool","internal/color","internal/exit","zapcore"]
-  revision = "dadca013650a921313c28fa51e4e89e84e3e252d"
+  packages = [
+    ".",
+    "buffer",
+    "internal/bufferpool",
+    "internal/color",
+    "internal/exit",
+    "zapcore"
+  ]
+  revision = "35aad584952c3e7020db7b839f6b102de6271f89"
+  version = "v1.7.1"
 
 [[projects]]
-  branch = "v1"
-  name = "gopkg.in/yaml.v1"
+  name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "9f9df34309c04878acc86042b16630b0f696e1de"
+  revision = "7f97868eec74b32b0982dd158a51a446d1da7eb5"
+  version = "v2.1.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ee784cb9ade8effba2dc94ef4f984083d4749d60f05a1a172940698150b5526e"
+  inputs-digest = "abd9869985888e3bb1e9c312a0e68a918dfc67ae3518eab300d4c4da52546f0f"
   solver-name = "gps-cdcl"
   solver-version = 1
