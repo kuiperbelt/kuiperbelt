@@ -1,28 +1,28 @@
 # kuiperbelt
 
-[![Build Status](https://travis-ci.org/mackee/kuiperbelt.svg)](https://travis-ci.org/mackee/kuiperbelt)
+[![Build Status](https://travis-ci.org/kuiperbelt/kuiperbelt.svg)](https://travis-ci.org/kuiperbelt/kuiperbelt)
 
 The proxy server that converts WebSocket to HTTP/1.x.
 
 ## Install & Usage
 
-NOTICE: [README.ja.md](https://github.com/mackee/kuiperbelt/blob/master/README.ja.md) is more details and tutorial in Japanese.
+NOTICE: [README.ja.md](https://github.com/kuiperbelt/kuiperbelt/blob/master/README.ja.md) is more details and tutorial in Japanese.
 
 ### Installation
 
-I recommend installing from [binary releases](https://github.com/mackee/kuiperbelt/releases).
+I recommend installing from [binary releases](https://github.com/kuiperbelt/kuiperbelt/releases).
 
 This installation easy and well to do using [Songmu/ghg](https://github.com/Songmu/ghg).
 
 ```console
-$ ghg get mackee/kuiperbelt
+$ ghg get kuiperbelt/kuiperbelt
 $ export PATH=$(ghg bin):$PATH
 ```
 
 Also, you can use the kuiperbelt in docker.
 
 ```
-$ docker pull mackee/kuiperbelt:latest
+$ docker pull kuiperbelt/kuiperbelt:latest
 ```
 
 ### Configuration
@@ -65,7 +65,7 @@ idle_timeout: 0
 
 Also, if you using docker image, you can set these options by environment variables.
 
-The corresponding environment variable is following [_example/config_by_env.yml](https://github.com/mackee/kuiperbelt/blob/master/_example/config_by_env.yml).
+The corresponding environment variable is following [_example/config_by_env.yml](https://github.com/kuiperbelt/kuiperbelt/blob/master/_example/config_by_env.yml).
 
 ### Launch
 
@@ -77,10 +77,10 @@ $ ekbo -config=config.yml
 Or, launch in docker.
 
 ```
-docker run -p 9180:9180 -e EKBO_CONNECT_CALLBACK_URL=http://yourwebapp/connect mackee/kuiperbelt
+docker run -p 9180:9180 -e EKBO_CONNECT_CALLBACK_URL=http://yourwebapp/connect kuiperbelt/kuiperbelt
 ```
 
-Also, an example application in [_example](https://github.com/mackee/kuiperbelt/blob/master/_example). You can launch this application by docker-compose.
+Also, an example application in [_example](https://github.com/kuiperbelt/kuiperbelt/blob/master/_example). You can launch this application by docker-compose.
 
 ## Features
 
@@ -121,6 +121,6 @@ The callback is similar to webhook.
 
 ## License
 
-[The MIT License](https://github.com/mackee/kuiperbelt/blob/master/LICENCE)
+[The MIT License](https://github.com/kuiperbelt/kuiperbelt/blob/master/LICENCE)
 
 Copyright (c) 2015 TANIWAKI Makoto / (c) 2015 [KAYAC Inc.](https://github.com/kayac)

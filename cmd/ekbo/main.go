@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/google/gops/agent"
-	"github.com/mackee/kuiperbelt"
+	"github.com/kuiperbelt/kuiperbelt"
 )
 
 func main() {
