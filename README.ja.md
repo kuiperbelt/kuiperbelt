@@ -24,7 +24,7 @@ kuiperbeltは以下の機能を提供します。
 Goをインストールした状態かつ`$GOPATH/bin`が$PATHに含まれている状態で以下のコマンドを入力します。
 
 ```sh
-$ go get github.com/mackee/kuiperbelt/cmd/ekbo
+$ go get github.com/kuiperbelt/kuiperbelt/cmd/ekbo
 ```
 
 このコマンドが成功すると`ekbo`コマンドが使えるようになります。
@@ -84,7 +84,7 @@ $ ( echo "HTTP/1.0 200 Ok\nX-Kuiperbelt-Session: alice"; echo; echo "Hello Kuipe
 
 #### 参考実装
 
-[_example/app.psgi](https://github.com/mackee/kuiperbelt/blob/master/_example/app.psgi)Perl/Plackでの参考実装があります。
+[_example/app.psgi](https://github.com/kuiperbelt/kuiperbelt/blob/master/_example/app.psgi)Perl/Plackでの参考実装があります。
 
 #### 4. kuiperbeltの起動
 
@@ -182,7 +182,7 @@ $ curl -XPOST -H'X-Kuiperbelt-Session: alice' -d 'Bye' http://localhost:12345/cl
 
 ## ライセンス
 
-[The MIT License](https://github.com/mackee/kuiperbelt/blob/master/LICENCE)
+[The MIT License](https://github.com/kuiperbelt/kuiperbelt/blob/master/LICENCE)
 
 Copyright (c) 2015 TANIWAKI Makoto / (c) 2015 [KAYAC Inc.](https://github.com/kayac)
 
