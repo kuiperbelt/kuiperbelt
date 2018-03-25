@@ -80,7 +80,7 @@ Or, launch in docker.
 docker run -p 9180:9180 -e EKBO_CONNECT_CALLBACK_URL=http://yourwebapp/connect kuiperbelt/kuiperbelt
 ```
 
-Also, an example application in [_example](https://github.com/kuiperbelt/kuiperbelt/blob/master/_example). You can launch this application by docker-compose.
+Also, an example application in [kuiperbelt/webchat-example](https://github.com/kuiperbelt/webchat-example). You can launch this application by docker-compose.
 
 ## Features
 
