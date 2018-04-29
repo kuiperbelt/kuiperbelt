@@ -377,6 +377,7 @@ func (s *WebSocketSession) sendCloseCallback() {
 			zap.Error(err),
 			zap.String("session", s.Key()),
 		)
+		return
 	}
 	defer resp.Body.Close()
 
