@@ -1,2 +1,4 @@
 pkg/
 vendor/
+_artifacts/
+_bin/

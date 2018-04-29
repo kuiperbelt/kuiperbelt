@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/google/gops/agent"
-	"github.com/mackee/kuiperbelt"
+	"github.com/kuiperbelt/kuiperbelt"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 		return
 	}
 
-	if err := agent.Listen(&agent.Options{Addr: gopsAddr}); err != nil {
+	if err := agent.Listen(agent.Options{Addr: gopsAddr}); err != nil {
 		log.Fatal(err)
 	}
 
