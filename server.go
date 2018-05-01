@@ -371,7 +371,6 @@ func (s *WebSocketSession) sendCloseCallback() {
 	}
 	req.Close = s.server.shouldDisconnectCallbackRequest()
 	resp, err := callbackClient.Do(req)
-
 	if err != nil {
 		Log.Error("failed send close callback request.",
 			zap.Error(err),
@@ -396,6 +395,7 @@ func (s *WebSocketSession) sendCloseCallback() {
 			zap.String("status", resp.Status),
 			zap.String("error", string(buf)),
 		)
+		return
 	}
 
 	Log.Info("success close callback.",
