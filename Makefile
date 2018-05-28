@@ -1,6 +1,6 @@
 CMD_NAME     = ekbo
 CMD_PATH     = ./cmd/ekbo
-PACKAGE_PATH = github.co/kuiperbelt/kuiperbelt
+PACKAGE_PATH = github.com/kuiperbelt/kuiperbelt
 
 .PHONY: static-build docker-image
 
