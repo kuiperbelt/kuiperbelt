@@ -44,6 +44,7 @@ type WebSocketServer struct {
 	Pool     *SessionPool
 	upgrader websocket.Upgrader
 	timer    *time.Timer
+	receiver Receiver
 }
 
 func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
@@ -75,12 +76,25 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 			return true
 		}
 	}
+
+	var receiver Receiver
+	if c.Callback.Receive != "" {
+		u, err := url.Parse(c.Callback.Receive)
+		if err != nil {
+			Log.Fatal("failed parse config.Callback.Receive",
+				zap.Error(err),
+			)
+		}
+		receiver = newReceiverCallback(callbackClient, u)
+	}
+
 	return &WebSocketServer{
 		Config:   c,
 		Stats:    s,
 		Pool:     p,
 		upgrader: upgrader,
 		timer:    time.NewTimer(callbackPersistentLimit),
+		receiver: receiver,
 	}
 }
 
@@ -426,7 +440,7 @@ func (s *WebSocketSession) sendMessages() {
 func (s *WebSocketSession) recvMessages() {
 	defer s.Close()
 	for {
-		_, r, err := s.ws.NextReader()
+		msgType, r, err := s.ws.NextReader()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err,
 				websocket.CloseGoingAway,
@@ -446,9 +460,15 @@ func (s *WebSocketSession) recvMessages() {
 			return
 		}
 		buf := make([]byte, ioBufferSize)
-		_, err = io.CopyBuffer(ioutil.Discard, r, buf)
-		if err != nil {
-			break
+		if s.server.hasReceiveCallback() {
+			ctx := context.Background()
+			m := newReceivedMessage(msgType, r)
+			err = s.server.receiver.Receive(ctx, m)
+		} else {
+			_, err = io.CopyBuffer(ioutil.Discard, r, buf)
+			if err != nil {
+				break
+			}
 		}
 	}
 
@@ -516,4 +536,8 @@ func messageMarshal(v interface{}) ([]byte, int, error) {
 	}
 
 	return message.Body, messageType, nil
+}
+
+func (s *WebSocketServer) hasReceiveCallback() bool {
+	return s.receiver != nil
 }

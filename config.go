@@ -43,6 +43,7 @@ type Callback struct {
 	Connect string        `yaml:"connect"`
 	Close   string        `yaml:"close"`
 	Timeout time.Duration `yaml:"timeout"`
+	Receive string        `yaml:"receive"`
 }
 
 func NewConfig(filename string) (*Config, error) {
