@@ -3,8 +3,10 @@ package kuiperbelt
 import (
 	"context"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -63,9 +65,35 @@ func (r *receiverCallback) Receive(ctx context.Context, m receivedMessage) error
 	if err != nil {
 		return errors.Wrap(err, "failed post receive callback request")
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("unsuccess post receive callback request")
+		err := errCallbackResponseNotOK(resp.StatusCode)
+		return errors.Wrap(err, "unsuccessful post receive callback request")
 	}
 
 	return nil
+}
+
+type discardReceiver struct {
+	pool sync.Pool
+}
+
+func newDiscardReceiver() Receiver {
+	return &discardReceiver{
+		pool: sync.Pool{
+			New: func() interface{} {
+				return make([]byte, ioBufferSize)
+			},
+		},
+	}
+}
+
+func (r *discardReceiver) Receive(ctx context.Context, m receivedMessage) error {
+	buf := r.pool.Get().([]byte)
+	_, err := io.CopyBuffer(ioutil.Discard, m.Message, buf)
+	if err != nil {
+		return errors.Wrap(err, "cannot read message on discard")
+	}
+	r.pool.Put(buf)
+	return err
 }

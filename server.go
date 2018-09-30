@@ -77,7 +77,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 		}
 	}
 
-	var receiver Receiver
+	receiver := newDiscardReceiver()
 	if c.Callback.Receive != "" {
 		u, err := url.Parse(c.Callback.Receive)
 		if err != nil {
@@ -459,16 +459,11 @@ func (s *WebSocketSession) recvMessages() {
 			)
 			return
 		}
-		buf := make([]byte, ioBufferSize)
-		if s.server.hasReceiveCallback() {
-			ctx := context.Background()
-			m := newReceivedMessage(msgType, r)
-			err = s.server.receiver.Receive(ctx, m)
-		} else {
-			_, err = io.CopyBuffer(ioutil.Discard, r, buf)
-			if err != nil {
-				break
-			}
+		ctx := context.Background()
+		m := newReceivedMessage(msgType, r)
+		err = s.server.receiver.Receive(ctx, m)
+		if err != nil {
+			break
 		}
 	}
 
@@ -536,8 +531,4 @@ func messageMarshal(v interface{}) ([]byte, int, error) {
 	}
 
 	return message.Body, messageType, nil
-}
-
-func (s *WebSocketServer) hasReceiveCallback() bool {
-	return s.receiver != nil
 }
