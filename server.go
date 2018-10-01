@@ -460,6 +460,11 @@ func (s *WebSocketSession) recvMessages() {
 			return
 		}
 		ctx := context.Background()
+		if timeout := s.server.Config.Callback.Timeout; timeout != 0 {
+			var cancel func()
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		}
 		h := http.Header{
 			s.server.Config.SessionHeader: {s.Key()},
 		}
