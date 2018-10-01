@@ -85,7 +85,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 				zap.Error(err),
 			)
 		}
-		receiver = newReceiverCallback(callbackClient, u)
+		receiver = newCallbackReceiver(callbackClient, u)
 	}
 
 	return &WebSocketServer{
@@ -460,10 +460,17 @@ func (s *WebSocketSession) recvMessages() {
 			return
 		}
 		ctx := context.Background()
-		m := newReceivedMessage(msgType, r)
+		h := http.Header{
+			s.server.Config.SessionHeader: {s.Key()},
+		}
+		m := newReceivedMessage(msgType, h, r)
 		err = s.server.receiver.Receive(ctx, m)
 		if err != nil {
-			break
+			Log.Error(
+				"receive callback failed",
+				zap.Error(err),
+			)
+			continue
 		}
 	}
 

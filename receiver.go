@@ -15,9 +15,10 @@ import (
 type receivedMessage struct {
 	Message     io.Reader
 	ContentType string
+	Header      http.Header
 }
 
-func newReceivedMessage(msgType int, r io.Reader) receivedMessage {
+func newReceivedMessage(msgType int, h http.Header, r io.Reader) receivedMessage {
 	var contentType string
 	switch msgType {
 	case websocket.TextMessage:
@@ -28,6 +29,7 @@ func newReceivedMessage(msgType int, r io.Reader) receivedMessage {
 	return receivedMessage{
 		Message:     r,
 		ContentType: contentType,
+		Header:      h,
 	}
 }
 
@@ -37,19 +39,19 @@ type Receiver interface {
 }
 
 // NewReceiverCallback is generate Receiver that proxy message to callback.Receive
-func newReceiverCallback(client *http.Client, callback *url.URL) Receiver {
-	return &receiverCallback{
+func newCallbackReceiver(client *http.Client, callback *url.URL) Receiver {
+	return &callbackReceiver{
 		client:   client,
 		callback: callback,
 	}
 }
 
-type receiverCallback struct {
+type callbackReceiver struct {
 	client   *http.Client
 	callback *url.URL
 }
 
-func (r *receiverCallback) Receive(ctx context.Context, m receivedMessage) error {
+func (r *callbackReceiver) Receive(ctx context.Context, m receivedMessage) error {
 	req, err := http.NewRequest(
 		http.MethodPost,
 		r.callback.String(),
@@ -60,6 +62,11 @@ func (r *receiverCallback) Receive(ctx context.Context, m receivedMessage) error
 	}
 	req = req.WithContext(ctx)
 	req.Header.Set("Content-Type", m.ContentType)
+	for k, v := range m.Header {
+		for _, vv := range v {
+			req.Header.Add(k, vv)
+		}
+	}
 
 	resp, err := r.client.Do(req)
 	if err != nil {
