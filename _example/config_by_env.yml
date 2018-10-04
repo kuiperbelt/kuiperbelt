@@ -2,6 +2,7 @@ port: {{ env "EKBO_PORT" "9180" }}
 callback:
   connect: {{ env "EKBO_CONNECT_CALLBACK_URL" "http://localhost:12346/connect" }}
   close: {{ env "EKBO_CLOSE_CALLBACK_URL" "" }}
+  receive: {{ env "EKBO_RECEIVE_CALLBACK_URL" "" }}
   timeout: {{ env "EKBO_CALLBACK_TIMEOUT" "0" }}
 suppress_access_log: {{ env "EKBO_SUPPRESS_ACCESS_LOG" "false" }}
 session_header: {{ env "EKBO_SESSION_HEADER_NAME" "X-Kuiperbelt-Session" }}

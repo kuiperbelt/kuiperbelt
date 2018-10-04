@@ -39,6 +39,8 @@ callback:
   connect: "http://localhost:12346/connect"
   # A close callback is similar working to the connect callback. A kuiperbelt send request this callback when closed connection by a client or timeout of idle(if set `idle_timeout`).
   close: "http:/localhost:12346/close"
+  # If set this and push message from client, POST to this url with-in message.
+  receive: "http:/localhost:12346/receive"
   timeout: 10s    # timeout of callback response
 # A log level of access log is `info`. But suppress this when this option is true.
 suppress_access_log: false 

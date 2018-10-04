@@ -352,3 +352,56 @@ func TestWebSocketServer__Handler__SlowCallback(t *testing.T) {
 		t.Error("unexpected status code:", resp.StatusCode)
 	}
 }
+
+func TestWebSocketSession__CallbackReceiver(t *testing.T) {
+	c := TestConfig
+
+	receiveHandlerEvent := make(chan struct{})
+	receiveBuf := &bytes.Buffer{}
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tccConnect := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tccReceive := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Content-Type") != "text/plain" {
+				t.Errorf("received message Content-Type is not text/plain: %s", r.Header.Get("Content-Type"))
+			}
+			if r.Header.Get(c.SessionHeader) != "hogehoge" {
+				t.Errorf("received message Session Key is not match: %s", r.Header.Get(c.SessionHeader))
+			}
+			io.Copy(receiveBuf, r.Body)
+			defer r.Body.Close()
+			receiveHandlerEvent <- struct{}{}
+		}),
+	)
+
+	c.Callback.Connect = tccConnect.URL
+	c.Callback.Receive = tccReceive.URL
+
+	var pool SessionPool
+	server := NewWebSocketServer(c, NewStats(), &pool)
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	dialer := websocket.Dialer{}
+	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"hogehoge"}})
+	if err != nil {
+		t.Fatal("cannot connect error:", err)
+	}
+
+	go func() {
+		var err error
+		for err == nil {
+			_, _, err = conn.ReadMessage() // drop messages
+		}
+	}()
+
+	err = conn.WriteMessage(websocket.TextMessage, []byte("hello receive message"))
+	if err != nil {
+		t.Errorf("unexpected error on write message from client: %s", err)
+	}
+	<-receiveHandlerEvent
+
+	if receiveBuf.String() != "hello receive message" {
+		t.Errorf("calling back message is not match: %s", receiveBuf.String())
+	}
+}
