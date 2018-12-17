@@ -1,4 +1,4 @@
-FROM golang:1.10 AS build
+FROM golang:1.11 AS build
 
 WORKDIR /work
 ENV GOPATH /work/gocode
