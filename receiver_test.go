@@ -56,7 +56,7 @@ func TestCallbackReceiver__Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error at Parse okServer.URL: %s", err)
 	}
-	receiver := newCallbackReceiver(http.DefaultClient, u)
+	receiver := newCallbackReceiver(http.DefaultClient, u, TestConfig)
 
 	m := strings.NewReader("hello upstream callback")
 	msg := newReceivedMessage(
@@ -95,7 +95,7 @@ func TestCallbackReceiver__Unauthorized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error at Parse ngServer.URL: %s", err)
 	}
-	receiver := newCallbackReceiver(http.DefaultClient, u)
+	receiver := newCallbackReceiver(http.DefaultClient, u, TestConfig)
 
 	m := strings.NewReader("hello upstream callback")
 	msg := newReceivedMessage(
