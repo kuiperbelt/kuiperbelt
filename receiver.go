@@ -39,16 +39,18 @@ type Receiver interface {
 }
 
 // NewReceiverCallback is generate Receiver that proxy message to callback.Receive
-func newCallbackReceiver(client *http.Client, callback *url.URL) Receiver {
+func newCallbackReceiver(client *http.Client, callback *url.URL, c Config) Receiver {
 	return &callbackReceiver{
 		client:   client,
 		callback: callback,
+		config:   c,
 	}
 }
 
 type callbackReceiver struct {
 	client   *http.Client
 	callback *url.URL
+	config   Config
 }
 
 func (r *callbackReceiver) Receive(ctx context.Context, m receivedMessage) error {
@@ -62,6 +64,7 @@ func (r *callbackReceiver) Receive(ctx context.Context, m receivedMessage) error
 	}
 	req = req.WithContext(ctx)
 	req.Header.Set("Content-Type", m.ContentType)
+	req.Header.Set(ENDPOINT_HEADER_NAME, r.config.Endpoint)
 	for k, v := range m.Header {
 		for _, vv := range v {
 			req.Header.Add(k, vv)

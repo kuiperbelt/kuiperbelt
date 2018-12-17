@@ -85,7 +85,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 				zap.Error(err),
 			)
 		}
-		receiver = newCallbackReceiver(callbackClient, u)
+		receiver = newCallbackReceiver(callbackClient, u, c)
 	}
 
 	return &WebSocketServer{
