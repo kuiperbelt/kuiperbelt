@@ -37,6 +37,13 @@ var TestConfig = Config{
 	},
 	Endpoint:     "localhost",
 	OriginPolicy: DefaultOriginPolicy,
+	Path: Path{
+		Connect: "/connect",
+		Close:   "/close",
+		Stats:   "/stats",
+		Ping:    "/ping",
+		Send:    "/send",
+	},
 }
 
 func TestConfig__NewConfig(t *testing.T) {
