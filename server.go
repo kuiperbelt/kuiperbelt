@@ -139,8 +139,8 @@ func (s *WebSocketServer) Register() {
 		MaxIdleConnsPerHost: CALLBACK_CLIENT_MAX_CONNS_PER_HOST,
 		IdleConnTimeout:     callbackPersistentLimit,
 	}
-	http.HandleFunc("/connect", s.Handler)
-	http.HandleFunc("/stats", s.StatsHandler)
+	http.HandleFunc(s.Config.Path.Connect, s.Handler)
+	http.HandleFunc(s.Config.Path.Stats, s.StatsHandler)
 }
 
 func (s *WebSocketServer) StatsHandler(w http.ResponseWriter, r *http.Request) {

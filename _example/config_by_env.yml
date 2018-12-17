@@ -1,4 +1,10 @@
 port: {{ env "EKBO_PORT" "9180" }}
+path:
+  connect: {{ env "EKBO_CONNECT_PATH" "/connect" }}
+  close: {{ env "EKBO_CLOSE_PATH" "/close" }}
+  stats: {{ env "EKBO_STATS_PATH" "/stats" }}
+  send: {{ env "EKBO_SEND_PATH" "/send" }}
+  ping: {{ env "EKBO_PING_PATH" "/ping" }}
 callback:
   connect: {{ env "EKBO_CONNECT_CALLBACK_URL" "http://localhost:12346/connect" }}
   close: {{ env "EKBO_CLOSE_CALLBACK_URL" "" }}

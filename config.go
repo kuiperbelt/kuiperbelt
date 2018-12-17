@@ -37,6 +37,7 @@ type Config struct {
 	OriginPolicy      string            `yaml:"origin_policy"`
 	IdleTimeout       time.Duration     `yaml:"idle_timeout"`
 	SuppressAccessLog bool              `yaml:"suppress_access_log"`
+	Path              Path              `yaml:"path"`
 }
 
 type Callback struct {
@@ -44,6 +45,14 @@ type Callback struct {
 	Close   string        `yaml:"close"`
 	Timeout time.Duration `yaml:"timeout"`
 	Receive string        `yaml:"receive"`
+}
+
+type Path struct {
+	Connect string `yaml:"connect"`
+	Close   string `yaml:"close"`
+	Stats   string `yaml:"stats"`
+	Send    string `yaml:"send"`
+	Ping    string `yaml:"ping"`
 }
 
 func NewConfig(filename string) (*Config, error) {
@@ -94,6 +103,22 @@ func tryBindDefaultToConfig(c *Config) (*Config, error) {
 			strings.Join(validOriginPolicies, ", "),
 			c.OriginPolicy,
 		)
+	}
+
+	if c.Path.Connect == "" {
+		c.Path.Connect = "/connect"
+	}
+	if c.Path.Close == "" {
+		c.Path.Close = "/close"
+	}
+	if c.Path.Stats == "" {
+		c.Path.Stats = "/stats"
+	}
+	if c.Path.Send == "" {
+		c.Path.Send = "/send"
+	}
+	if c.Path.Ping == "" {
+		c.Path.Ping = "/ping"
 	}
 
 	return c, nil

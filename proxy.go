@@ -42,9 +42,9 @@ func NewProxy(c Config, s *Stats, p *SessionPool) *Proxy {
 
 func (p *Proxy) Register() {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/send", p.SendHandlerFunc)
-	mux.HandleFunc("/close", p.CloseHandlerFunc)
-	mux.HandleFunc("/ping", p.PingHandlerFunc)
+	mux.HandleFunc(p.Config.Path.Send, p.SendHandlerFunc)
+	mux.HandleFunc(p.Config.Path.Close, p.CloseHandlerFunc)
+	mux.HandleFunc(p.Config.Path.Ping, p.PingHandlerFunc)
 	if p.Config.SuppressAccessLog {
 		http.Handle("/", mux)
 	} else {
