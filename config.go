@@ -38,6 +38,7 @@ type Config struct {
 	IdleTimeout       time.Duration     `yaml:"idle_timeout"`
 	SuppressAccessLog bool              `yaml:"suppress_access_log"`
 	Path              Path              `yaml:"path"`
+	JWTPrivateKey     []byte            `yaml:"jwt_private_key"`
 }
 
 type Callback struct {
@@ -119,6 +120,9 @@ func tryBindDefaultToConfig(c *Config) (*Config, error) {
 	}
 	if c.Path.Ping == "" {
 		c.Path.Ping = "/ping"
+	}
+	if c.JWTPrivateKey != nil && len(c.JWTPrivateKey) == 0 {
+		c.JWTPrivateKey = nil
 	}
 
 	return c, nil
