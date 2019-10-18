@@ -45,6 +45,7 @@ type WebSocketServer struct {
 	upgrader websocket.Upgrader
 	timer    *time.Timer
 	receiver Receiver
+	keyGen   *sessionKeyGen
 }
 
 func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
@@ -88,6 +89,13 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 		receiver = newCallbackReceiver(callbackClient, u, c)
 	}
 
+	kg, err := NewSessionKeyGen(c.Endpoint, c.JWTPrivateKey)
+	if err != nil {
+		Log.Fatal("failed initialize key generator",
+			zap.Error(err),
+		)
+	}
+
 	return &WebSocketServer{
 		Config:   c,
 		Stats:    s,
@@ -95,6 +103,7 @@ func NewWebSocketServer(c Config, s *Stats, p *SessionPool) *WebSocketServer {
 		upgrader: upgrader,
 		timer:    time.NewTimer(callbackPersistentLimit),
 		receiver: receiver,
+		keyGen:   kg,
 	}
 }
 
@@ -196,6 +205,13 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	callbackRequest.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
 	callbackRequest.Close = s.shouldDisconnectCallbackRequest()
 
+	serverKey, err := s.keyGen.Generate()
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return nil, err
+	}
+	callbackRequest.Header.Add(s.Config.SessionHeader, serverKey.String())
+
 	// set callback timeout
 	if timeout := s.Config.Callback.Timeout; timeout != 0 {
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
@@ -217,9 +233,7 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	}
 	key := resp.Header.Get(s.Config.SessionHeader)
 	if key == "" {
-		resp.Body.Close()
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return nil, errors.New("kuiperbelt: session key header is not exist")
+		resp.Header.Set(s.Config.SessionHeader, serverKey.String())
 	}
 
 	return resp, nil

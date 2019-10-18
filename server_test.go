@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -25,6 +26,7 @@ type testSuccessConnectCallbackServer struct {
 	isCallbacked bool
 	isClosed     bool
 	header       http.Header
+	session      string
 }
 
 func (s *testSuccessConnectCallbackServer) IsCallbacked() bool {
@@ -45,36 +47,72 @@ func (s *testSuccessConnectCallbackServer) Header() http.Header {
 	return s.header
 }
 
+func (s *testSuccessConnectCallbackServer) validateSuccessRequest(r *http.Request) error {
+	if r.Header.Get("Connection") == "upgrade" {
+		return errors.New("Connection header is upgrade")
+	}
+	if r.Header.Get("Upgrade") != "" {
+		return errors.New("Upgrade header is sent")
+	}
+	for n := range r.Header {
+		if strings.HasPrefix(strings.ToLower(n), "sec-websocket") {
+			return errors.New("header is sent")
+		}
+	}
+	if r.Header.Get("X-Forwarded-For") != "" {
+		return errors.New("X-Forwarded-For must be removed")
+	}
+	if r.Header.Get("X-Foo") != "Foo" {
+		return errors.New("X-Foo is unexpected")
+	}
+
+	keyGen, err := NewSessionKeyGen(TestConfig.Endpoint, nil)
+	if err != nil {
+		return errors.Wrap(err, "unexpected error from NewSessionKeyGen")
+	}
+	jwtKey := r.Header.Get(TestConfig.SessionHeader)
+	kt, err := keyGen.FromString(jwtKey)
+	if err != nil {
+		return errors.Wrap(err, "unexpected error from FromString")
+	}
+	if kt.Key() == "" {
+		return errors.New("jwt key is empty")
+	}
+
+	return nil
+}
+
 func (s *testSuccessConnectCallbackServer) SuccessHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	s.isCallbacked = true
 	s.header = r.Header
+	s.session = "hogehoge"
 	s.mu.Unlock()
 
-	if r.Header.Get("Connection") == "upgrade" {
-		http.Error(w, "Connection header is upgrade", http.StatusBadRequest)
-		return
-	}
-	if r.Header.Get("Upgrade") != "" {
-		http.Error(w, "Upgrade header is sent", http.StatusBadRequest)
-		return
-	}
-	for n := range r.Header {
-		if strings.HasPrefix(strings.ToLower(n), "sec-websocket") {
-			http.Error(w, n+" header is sent", http.StatusBadRequest)
-			return
-		}
-	}
-	if r.Header.Get("X-Forwarded-For") != "" {
-		http.Error(w, "X-Forwarded-For must be removed", http.StatusBadRequest)
-		return
-	}
-	if r.Header.Get("X-Foo") != "Foo" {
-		http.Error(w, "X-Foo is unexpected", http.StatusBadRequest)
+	err := s.validateSuccessRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Add(TestConfig.SessionHeader, "hogehoge")
+	w.Header().Add(TestConfig.SessionHeader, s.session)
+	w.WriteHeader(http.StatusOK)
+	io.WriteString(w, testHelloMessage)
+}
+
+func (s *testSuccessConnectCallbackServer) SuccessDontReturnSessionHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	s.isCallbacked = true
+	s.header = r.Header
+	s.session = r.Header.Get(TestConfig.SessionHeader)
+	s.mu.Unlock()
+
+	err := s.validateSuccessRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	io.WriteString(w, testHelloMessage)
 }
@@ -165,6 +203,49 @@ func TestWebSocketServer__Handler__SuccessAuthorized(t *testing.T) {
 			"callback server doesn't receive endpoint name:",
 			callbackServer.Header().Get(testRequestSessionHeader),
 		)
+	}
+	if _, err := server.Pool.Get(callbackServer.session); err != nil {
+		t.Errorf("kuiperbelt does not set key: %s", err)
+	}
+}
+
+func TestWebSocketServer__Handler__SuccessAuthorizedDontReturnSession(t *testing.T) {
+	var pool SessionPool
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tcc := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessDontReturnSessionHandler))
+
+	c := TestConfig
+	c.Callback.Connect = tcc.URL
+
+	server := NewWebSocketServer(c, NewStats(), &pool)
+
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	req, err := newTestWebSocketRequest(tc.URL)
+	if err != nil {
+		t.Fatal("cannot create request error:", err)
+	}
+
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("to server upgrade request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Error("unexpected status code:", resp.StatusCode)
+	}
+	if !callbackServer.IsCallbacked() {
+		t.Error("callback server doesn't receive request")
+	}
+	if _, err := server.Pool.Get(callbackServer.session); err != nil {
+		t.Errorf("kuiperbelt does not set jwt key: %s", err)
+	}
+	kg, _ := NewSessionKeyGen(TestConfig.Endpoint, nil)
+	_, err = kg.FromString(callbackServer.session)
+	if err != nil {
+		t.Errorf("cannot parse session in jwt: %s", err)
 	}
 }
 
