@@ -175,6 +175,70 @@ func TestProxyCloseHandlerFunc__BulkClose(t *testing.T) {
 	}
 }
 
+func TestProxyCloseHandlerFunc__BulkCloseWithNotExistSession(t *testing.T) {
+	var pool SessionPool
+	s1 := &TestSession{
+		key:  "hogehoge",
+		send: make(chan Message, 4),
+	}
+	s2 := &TestSession{
+		key:  "fugafuga",
+		send: make(chan Message, 4),
+	}
+
+	pool.Add(s1)
+	pool.Add(s2)
+
+	tc := TestConfig
+	p := NewProxy(tc, NewStats(), &pool)
+	ts := httptest.NewServer(http.HandlerFunc(p.CloseHandlerFunc))
+	defer ts.Close()
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehoge")
+	req.Header.Add(tc.SessionHeader, "not-exist")
+
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string `json:"result"`
+		Errors []struct{
+			Error string `json:"error"`
+			Session string `json:"session"`
+		} `json:"errors"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "OK" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("proxy handler response unexpected error count: %v", len(result.Errors))
+	}
+	if result.Errors[0].Error != "kuiperbelt: session is not found" || result.Errors[0].Session != "not-exist" {
+		t.Fatalf("proxy handler response unexpected error message: %v", result.Errors[0])
+	}
+
+	msg1 := <-s1.send
+	if string(msg1.Body) != "test message" {
+		t.Errorf("proxy handler s1 not receive message: %s", string(msg1.Body))
+	}
+	if !msg1.LastWord {
+		t.Error("s1 does not receive last word")
+	}
+}
+
 func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 	var pool SessionPool
 	s1 := &TestSession{
