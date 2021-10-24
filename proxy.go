@@ -177,11 +177,12 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 
 	ss, err := p.handlerPreHook(w, r)
 	se, ok := err.(sessionErrors)
-	if ok && p.Config.StrictBroadcast {
-		p.sessionKeysErrorHandler(w, se, ss)
-		return
-	}
-	if err != nil {
+	if ok {
+		if p.Config.StrictBroadcast {
+			p.sessionKeysErrorHandler(w, se, ss)
+			return
+		}
+	} else if err != nil {
 		return
 	}
 
