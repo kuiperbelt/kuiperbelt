@@ -195,9 +195,10 @@ func (p *Proxy) CloseHandlerFunc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	message := Message{
-		Body:        buf,
-		ContentType: r.Header.Get("Content-Type"),
-		LastWord:    true,
+		Body:          buf,
+		ContentType:   r.Header.Get("Content-Type"),
+		LastWord:      true,
+		FromPostClose: true,
 	}
 
 	var ctx context.Context
