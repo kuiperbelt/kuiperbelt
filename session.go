@@ -17,10 +17,11 @@ type SessionPool struct {
 
 // Message is a message container for communicating through sessions.
 type Message struct {
-	Body        []byte
-	ContentType string
-	Session     string
-	LastWord    bool
+	Body          []byte
+	ContentType   string
+	Session       string
+	LastWord      bool
+	FromPostClose bool
 }
 
 // Session is an interface for sessions.

@@ -239,6 +239,69 @@ func TestProxyCloseHandlerFunc__BulkCloseWithNotExistSession(t *testing.T) {
 	}
 }
 
+func TestProxyCloseHandlerFunc__CloseAndCallback(t *testing.T) {
+	var pool SessionPool
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tcc1 := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tcc2 := httptest.NewServer(http.HandlerFunc(callbackServer.CloseHandler))
+
+	tc := TestConfig
+	tc.Callback.Connect = tcc1.URL
+	tc.Callback.Close = tcc2.URL
+
+	st := NewStats()
+	p := NewProxy(tc, st, &pool)
+	ts := httptest.NewServer(http.HandlerFunc(p.CloseHandlerFunc))
+	server := NewWebSocketServer(tc, st, &pool)
+	th := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	wsURL := strings.Replace(th.URL, "http://", "ws://", -1)
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"hogehoge"}})
+	if err != nil {
+		t.Fatal("cannot create connection config error:", err)
+	}
+
+	conn.ReadMessage() // ignore hello message
+
+	req, err := http.NewRequest("POST", ts.URL, bytes.NewBufferString("test message"))
+	if err != nil {
+		t.Fatal("proxy handler new request unexpected error:", err)
+	}
+	req.Header.Add(tc.SessionHeader, "hogehoge")
+
+	client := new(http.Client)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal("proxy handler request unexpected error:", err)
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	result := struct {
+		Result string `json:"result"`
+	}{}
+	err = dec.Decode(&result)
+	if err != nil {
+		t.Fatal("proxy handler response unexpected error:", err)
+	}
+	if result.Result != "OK" {
+		t.Fatalf("proxy handler response unexpected response: %+v", result)
+	}
+
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	if string(msg) != "test message" {
+		t.Errorf("proxy handler s1 not receive message: %s", string(msg))
+	}
+
+	if callbackServer.IsClosed() {
+		t.Error("receive close callback")
+	}
+}
+
 func TestProxySendHandlerFunc__StrictBroadcastFalse(t *testing.T) {
 	var pool SessionPool
 	s1 := &TestSession{

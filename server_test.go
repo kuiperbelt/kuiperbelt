@@ -36,7 +36,7 @@ func (s *testSuccessConnectCallbackServer) IsCallbacked() bool {
 func (s *testSuccessConnectCallbackServer) IsClosed() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.isCallbacked
+	return s.isClosed
 }
 
 func (s *testSuccessConnectCallbackServer) Header() http.Header {

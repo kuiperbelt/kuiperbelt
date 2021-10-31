@@ -360,6 +360,16 @@ func (s *WebSocketSession) Close() error {
 	return s.ws.Close()
 }
 
+// CloseWithNoCallback closes the session but does not fire callback.
+func (s *WebSocketSession) CloseWithNoCallback() error {
+	if atomic.SwapUint32(&s.closed, 1) != 0 {
+		return nil
+	}
+	s.server.Pool.Delete(s.key)
+	close(s.closedch)
+	return s.ws.Close()
+}
+
 func (s *WebSocketSession) Closed() <-chan struct{} {
 	return s.closedch
 }
@@ -428,7 +438,11 @@ func (s *WebSocketSession) sendMessages() {
 				return
 			}
 			if msg.LastWord {
-				s.Close()
+				if msg.FromPostClose {
+					s.CloseWithNoCallback()
+				} else {
+					s.Close()
+				}
 				return
 			}
 		case <-s.closedch:
