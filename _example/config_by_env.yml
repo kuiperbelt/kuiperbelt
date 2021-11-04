@@ -7,6 +7,7 @@ path:
   ping: {{ env "EKBO_PING_PATH" "/ping" }}
 callback:
   connect: {{ env "EKBO_CONNECT_CALLBACK_URL" "http://localhost:12346/connect" }}
+  establish: {{ env "EKBO_ESTABLISH_CALLBACK_URL" "" }}
   close: {{ env "EKBO_CLOSE_CALLBACK_URL" "" }}
   receive: {{ env "EKBO_RECEIVE_CALLBACK_URL" "" }}
   timeout: {{ env "EKBO_CALLBACK_TIMEOUT" "0" }}

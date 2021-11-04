@@ -405,3 +405,107 @@ func TestWebSocketSession__CallbackReceiver(t *testing.T) {
 		t.Errorf("calling back message is not match: %s", receiveBuf.String())
 	}
 }
+
+func TestWebSocketSession__Handler__SuccessEstablished(t *testing.T) {
+	c := TestConfig
+
+	establishHandlerEvent := make(chan struct{}, 1)
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tccConnect := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tccEstablish := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get(c.SessionHeader) != "hogehoge" {
+				t.Errorf("received message Session Key is not match: %s", r.Header.Get(c.SessionHeader))
+			}
+			establishHandlerEvent <- struct{}{}
+		}),
+	)
+
+	c.Callback.Connect = tccConnect.URL
+	c.Callback.Establish = tccEstablish.URL
+
+	var pool SessionPool
+	server := NewWebSocketServer(c, NewStats(), &pool)
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	dialer := websocket.Dialer{}
+	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"fugafuga"}})
+	if err != nil {
+		t.Fatal("cannot connect error:", err)
+	}
+
+	_, p, _ := conn.ReadMessage()
+	if string(p) != testHelloMessage {
+		t.Fatal("cannot receive the first message:", err)
+	}
+	select {
+	case <- establishHandlerEvent:
+	default:
+		t.Fatal("establish callback server doesn't receive request:")
+	}
+
+	_, err = pool.Get("hogehoge")
+	if err != nil {
+		t.Fatal("cannot get session error:", err)
+	}
+
+	err = conn.WriteMessage(websocket.TextMessage, []byte("barbar"))
+	if err != nil {
+		t.Fatal("cannot write to connection error:", err)
+	}
+
+	if !callbackServer.IsCallbacked() {
+		t.Error("callback server doesn't receive request")
+	}
+	if callbackServer.Header().Get(testRequestSessionHeader) != "fugafuga" {
+		t.Error(
+			"callback server doesn't receive session key:",
+			callbackServer.Header().Get(testRequestSessionHeader),
+		)
+	}
+	if callbackServer.Header().Get(ENDPOINT_HEADER_NAME) != c.Endpoint {
+		t.Error(
+			"callback server doesn't receive endpoint name:",
+			callbackServer.Header().Get(testRequestSessionHeader),
+		)
+	}
+}
+
+func TestWebSocketSession__Handler__FailEstablished(t *testing.T) {
+	c := TestConfig
+
+	callbackServer := new(testSuccessConnectCallbackServer)
+	tccConnect := httptest.NewServer(http.HandlerFunc(callbackServer.SuccessHandler))
+	tccEstablish := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get(c.SessionHeader) != "hogehoge" {
+				t.Errorf("received message Session Key is not match: %s", r.Header.Get(c.SessionHeader))
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+		}),
+	)
+
+	c.Callback.Connect = tccConnect.URL
+	c.Callback.Establish = tccEstablish.URL
+
+	var pool SessionPool
+	server := NewWebSocketServer(c, NewStats(), &pool)
+	tc := httptest.NewServer(http.HandlerFunc(server.Handler))
+
+	dialer := websocket.Dialer{}
+	wsURL := strings.Replace(tc.URL, "http://", "ws://", -1)
+	conn, _, err := dialer.Dial(wsURL, http.Header{testRequestSessionHeader: []string{"fugafuga"}})
+	if err != nil {
+		t.Fatal("cannot connect error:", err)
+	}
+
+	_, _, err = conn.ReadMessage()
+	if !websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+		t.Fatal("should be closed error:", err)
+	}
+	_, err = pool.Get("hogehoge")
+	if err != errSessionNotFound {
+		t.Fatal("shouldn't save session error:", err)
+	}
+}
