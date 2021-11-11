@@ -26,6 +26,7 @@ var TestConfig = Config{
 	SessionHeader: "X-Kuiperbelt-Session-Key",
 	Callback: Callback{
 		Connect: "http://localhost:12346/connect",
+		Establish: "",
 		Close:   "",
 		Timeout: time.Second * 5,
 	},

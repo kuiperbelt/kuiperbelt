@@ -37,6 +37,9 @@ callback:
   # When your application returning "HTTP/1.1 OK 200" in this callback, a connection upgrade to WebSocket.
   # However your callback returning other than "200" ("404", "403" and "500"...), this connection is a disconnect.
   connect: "http://localhost:12346/connect"
+  # If set this, POST to this url right after a connection upgraded to WebSocket.
+  # See https://github.com/kuiperbelt/kuiperbelt/issues/63 for details.
+  establish: "http:/localhost:12346/establish"
   # A close callback is similar working to the connect callback. A kuiperbelt send request this callback when closed connection by a client or timeout of idle(if set `idle_timeout`).
   close: "http:/localhost:12346/close"
   # If set this and push message from client, POST to this url with-in message.
@@ -113,6 +116,8 @@ The callback is similar to webhook.
 
 - `connect` callback - request when starts WebSocket.
   - response body: pass through to a client by WebSocket. useful to hello message.
+- `establish` callback - request when establishes WebSocket.
+  - useful to save session related information.
 - `close` callback - request when closed connection by client or idle.
 
 ## Author

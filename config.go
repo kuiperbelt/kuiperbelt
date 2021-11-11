@@ -42,6 +42,7 @@ type Config struct {
 
 type Callback struct {
 	Connect string        `yaml:"connect"`
+	Establish string      `yaml:"establish"`
 	Close   string        `yaml:"close"`
 	Timeout time.Duration `yaml:"timeout"`
 	Receive string        `yaml:"receive"`

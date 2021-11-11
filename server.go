@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"io"
 	"io/ioutil"
 	"net"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -131,6 +131,20 @@ func (s *WebSocketServer) Handler(w http.ResponseWriter, r *http.Request) {
 		s.Stats.ConnectErrorEvent()
 		return
 	}
+
+	if s.Config.Callback.Establish != "" {
+		key := resp.Header.Get(s.Config.SessionHeader)
+		err = s.EstablishCallbackHandler(key)
+		if err != nil {
+			Log.Error("establish error after upgrade",
+				zap.Error(err),
+				zap.String("session", key),
+			)
+			s.Stats.ConnectErrorEvent()
+			conn.Close()
+			return
+		}
+	}
 	wsHandler(conn)
 }
 
@@ -223,6 +237,43 @@ func (s *WebSocketServer) ConnectCallbackHandler(w http.ResponseWriter, r *http.
 	}
 
 	return resp, nil
+}
+
+func (s *WebSocketServer) EstablishCallbackHandler(key string) error {
+	req, err := http.NewRequest("POST", s.Config.Callback.Establish, nil)
+	if err != nil {
+		return errors.Wrap(err, "cannot create establish callback request")
+	}
+
+	req.Header.Add(s.Config.SessionHeader, key)
+	for name, value := range s.Config.ProxySetHeader {
+		if value == "" {
+			req.Header.Del(name)
+		} else {
+			req.Header.Set(name, value)
+		}
+	}
+
+	req.Header.Add(ENDPOINT_HEADER_NAME, s.Config.Endpoint)
+	req.Close = s.shouldDisconnectCallbackRequest()
+
+	// set callback timeout
+	if timeout := s.Config.Callback.Timeout; timeout != 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		req = req.WithContext(ctx)
+	}
+	resp, err := callbackClient.Do(req)
+	if err != nil {
+		return errors.Wrap(err, "failed post establish callback request")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err := errCallbackResponseNotOK(resp.StatusCode)
+		return errors.Wrap(err, "unsuccessful post establish callback request")
+	}
+
+	return nil
 }
 
 func (s *WebSocketServer) NewWebSocketHandler(resp *http.Response) (func(ws *websocket.Conn), error) {
