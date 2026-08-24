@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/BurntSushi/toml v0.3.0 // indirect
 	github.com/google/gops v0.3.3
-	github.com/gorilla/websocket v1.4.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/kardianos/osext v0.0.0-20170510131534-ae77be60afb1 // indirect
 	github.com/kayac/go-config v0.0.1
 	github.com/pkg/errors v0.8.0
